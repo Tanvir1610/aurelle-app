@@ -26,7 +26,7 @@ const t = (name, cond, extra = '') => {
 
 const noise = m => /Could not load|stylesheet|css|clerk/i.test(String(m));
 
-async function page(path, { clerkConfig, settle = 2000 } = {}) {
+async function page(path, { clerkConfig, hangConfig = false, settle = 2000 } = {}) {
   const vc = new VirtualConsole();
   vc.on('jsdomError', e => { if (!noise(e.message)) console.error(e.message); });
 
@@ -39,6 +39,11 @@ async function page(path, { clerkConfig, settle = 2000 } = {}) {
       win.fetch = (input, init) => {
         const url = typeof input === 'string' ? new URL(input, BASE + path).href : input;
         // Let a test pretend Clerk is configured without a real Clerk account.
+        // Simulate an auth endpoint that never answers — the exact
+        // condition that left the live account page blank.
+        if (hangConfig && String(url).endsWith('/api/config')) {
+          return new Promise(() => {});
+        }
         if (clerkConfig && String(url).endsWith('/api/config')) {
           return Promise.resolve(new Response(JSON.stringify(clerkConfig), {
             headers: { 'content-type': 'application/json' },
@@ -105,6 +110,33 @@ console.log('\n── signed-out prompt when Clerk is healthy ─────');
   const paintable = typeof win.AU_AUTH.retry === 'function';
   t('a retry entry point exists', paintable);
   t('box still populated after subscribe', text(box).length > 0);
+}
+
+console.log('\n── auth that never responds at all ─────────────');
+{
+  // Before the fix, boot awaited auth init, so a hung request meant the
+  // account controller never ran and the box stayed permanently empty.
+  const { doc, win } = await page('/account.html', { hangConfig: true, settle: 3000 });
+  const box = doc.querySelector('#accountBox');
+  const body = text(box);
+
+  t('page renders without waiting for auth', body.length > 0, '(EMPTY — the live bug)');
+  t('shows a loading state meanwhile', /loading/i.test(body), body.slice(0, 70));
+  t('header still rendered', !!doc.querySelector('.site-header'));
+  t('footer still rendered', !!doc.querySelector('.site-footer'));
+  t('cart drawer still wired', !!doc.querySelector('#cartDrawer'));
+  t('auth is still pending, as expected', win.AU_AUTH.state().ready === false);
+}
+
+console.log('\n── a hung auth service does not block shopping ──');
+{
+  const { doc, win } = await page('/collection.html', { hangConfig: true, settle: 3000 });
+  t('product grid renders', doc.querySelectorAll('#plpGrid .card').length > 0);
+  t('filters render', doc.querySelectorAll('#filters .filter-opt').length > 0);
+
+  const card = doc.querySelector('[data-add]');
+  card.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  t('items can still be added to the bag', win.AU_CART.totals().count === 1);
 }
 
 console.log('\n── customer order history over the API ─────────');

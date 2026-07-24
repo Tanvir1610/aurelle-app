@@ -42,10 +42,19 @@ services:
         value: "22.18.0"        # must be 22.5 or newer for node:sqlite
 
       - key: ADMIN_EMAIL
-        sync: false             # Render prompts you for this on first deploy
+        value: vhoratanvir1610@gmail.com          # gets dashboard access via Clerk sign-in
 
       - key: ADMIN_PASSWORD
-        sync: false             # set a real passphrase — never leave the default
+        sync: false             # only needed when AUTH_DRIVER=local
+
+      - key: AUTH_DRIVER
+        value: clerk
+
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false             # pk_test_... from Clerk -> API Keys
+
+      - key: CLERK_SECRET_KEY
+        sync: false             # sk_test_... — regenerate before using
 
       - key: SESSION_SECRET
         generateValue: true     # random, and stable across restarts
