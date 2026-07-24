@@ -310,12 +310,29 @@ server.listen(PORT, () => {
   console.log(`\n  Database     ${DB.DB_PATH}`);
   if (seeded.products) console.log(`  Seeded       ${seeded.products} products`);
   if (demoSeeded && demoSeeded.orders) console.log(`  Demo data    ${demoSeeded.orders} orders`);
-  if (seeded.admin) {
-    console.log(`\n  Dashboard login`);
-    console.log(`    email     ${seeded.admin.email}`);
-    console.log(`    password  ${seeded.admin.pass}`);
-    console.log(`\n  Change this before deploying anywhere public:`);
-    console.log(`    ADMIN_EMAIL=you@company.com ADMIN_PASSWORD=... node server/server.js`);
+  const a = seeded.admin;
+  if (a) {
+    console.log('');
+    if (a.mode === 'default') {
+      console.log(`  Dashboard login`);
+      console.log(`    email     ${a.email}`);
+      console.log(`    password  ${a.pass}`);
+      console.log(`\n  !! These defaults are published. Before deploying anywhere public:`);
+      console.log(`     ADMIN_EMAIL=you@company.com ADMIN_PASSWORD=... node server/server.js`);
+    } else if (a.mode === 'created') {
+      console.log(`  Admin account created for ${a.email}`);
+      if (a.removedDefault) console.log(`  Default admin@aurelle.local removed.`);
+    } else if (a.mode === 'updated') {
+      console.log(`  Admin password updated for ${a.email}`);
+      if (a.removedDefault) console.log(`  Default admin@aurelle.local removed.`);
+    } else if (a.mode === 'incomplete') {
+      console.log(`  !! ${a.missing} is not set, so the admin account was NOT changed.`);
+      console.log(`     Set both ADMIN_EMAIL and ADMIN_PASSWORD together.`);
+      if (a.usingDefaults) console.log(`     Currently running with no admin account at all.`);
+    } else {
+      console.log(`  Admin accounts: ${DB.listAdmins().map(x => x.email).join(', ')}`);
+      console.log(`  Set ADMIN_EMAIL and ADMIN_PASSWORD to change the password.`);
+    }
   }
   console.log(`${line}\n`);
 });

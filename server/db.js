@@ -123,6 +123,80 @@ function readFrontendCatalogue() {
   return sandbox.window.AU_DATA;
 }
 
+const DEFAULT_ADMIN_EMAIL = 'admin@aurelle.local';
+const DEFAULT_ADMIN_PASS = 'aurelle-admin';
+
+/**
+ * Reconciles the admin account with the environment on EVERY boot.
+ *
+ * Env vars are authoritative: whatever ADMIN_EMAIL / ADMIN_PASSWORD say is
+ * what works. Change them, restart, and the new credentials apply — you are
+ * never locked out by an account created on an earlier boot.
+ *
+ * Emails are normalised to lowercase on write and on login, so a capital
+ * letter in ADMIN_EMAIL cannot lock you out either.
+ */
+export function ensureAdmin() {
+  const email = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  const pass = process.env.ADMIN_PASSWORD || '';
+  const count = db.prepare('SELECT COUNT(*) AS a FROM admins').get().a;
+
+  // Only one half supplied — tell them rather than half-applying it.
+  if ((email && !pass) || (!email && pass)) {
+    return { mode: 'incomplete',
+             missing: email ? 'ADMIN_PASSWORD' : 'ADMIN_EMAIL',
+             usingDefaults: count === 0 };
+  }
+
+  if (email && pass) {
+    const { salt, hash } = hashPassword(pass);
+    const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
+
+    if (existing) {
+      db.prepare('UPDATE admins SET pass_hash = ?, pass_salt = ? WHERE id = ?')
+        .run(hash, salt, existing.id);
+    } else {
+      db.prepare('INSERT INTO admins (id,email,name,pass_hash,pass_salt) VALUES (?,?,?,?,?)')
+        .run(randomUUID(), email, 'Store manager', hash, salt);
+    }
+
+    // A configured account must not sit alongside the seeded default, or the
+    // published password would keep working on a public deployment.
+    const removed = db.prepare('DELETE FROM admins WHERE email = ? AND email != ?')
+      .run(DEFAULT_ADMIN_EMAIL, email).changes;
+
+    return { mode: existing ? 'updated' : 'created', email, removedDefault: removed > 0 };
+  }
+
+  if (count === 0) {
+    const { salt, hash } = hashPassword(DEFAULT_ADMIN_PASS);
+    db.prepare('INSERT INTO admins (id,email,name,pass_hash,pass_salt) VALUES (?,?,?,?,?)')
+      .run(randomUUID(), DEFAULT_ADMIN_EMAIL, 'Store manager', hash, salt);
+    return { mode: 'default', email: DEFAULT_ADMIN_EMAIL, pass: DEFAULT_ADMIN_PASS };
+  }
+
+  return { mode: 'existing' };
+}
+
+/** Set an admin password directly — used by tools/set-password.mjs. */
+export function setAdminPassword(rawEmail, plain) {
+  const email = String(rawEmail || '').toLowerCase().trim();
+  const { salt, hash } = hashPassword(plain);
+  const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
+  if (existing) {
+    db.prepare('UPDATE admins SET pass_hash = ?, pass_salt = ? WHERE id = ?')
+      .run(hash, salt, existing.id);
+    return { updated: true, email };
+  }
+  db.prepare('INSERT INTO admins (id,email,name,pass_hash,pass_salt) VALUES (?,?,?,?,?)')
+    .run(randomUUID(), email, 'Store manager', hash, salt);
+  return { created: true, email };
+}
+
+export function listAdmins() {
+  return db.prepare('SELECT email, name, created_at FROM admins ORDER BY created_at').all();
+}
+
 export function seedIfEmpty() {
   const { c } = db.prepare('SELECT COUNT(*) AS c FROM products').get();
   const seeded = { products: 0, admin: false };
@@ -141,16 +215,7 @@ export function seedIfEmpty() {
     seeded.products = cat.products.length;
   }
 
-  const { a } = db.prepare('SELECT COUNT(*) AS a FROM admins').get();
-  if (a === 0) {
-    const email = process.env.ADMIN_EMAIL || 'admin@aurelle.local';
-    const pass  = process.env.ADMIN_PASSWORD || 'aurelle-admin';
-    const { salt, hash } = hashPassword(pass);
-    db.prepare('INSERT INTO admins (id,email,name,pass_hash,pass_salt) VALUES (?,?,?,?,?)')
-      .run(randomUUID(), email, 'Store manager', hash, salt);
-    seeded.admin = { email, pass };
-  }
-
+  seeded.admin = ensureAdmin();
   return seeded;
 }
 
