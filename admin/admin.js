@@ -13,6 +13,9 @@
   let token = null;                 // local-auth token
   let cfg = { auth: 'local' };      // filled from /api/config
   let clerk = null;                 // Clerk instance when auth=clerk
+  let clerkReady = false;           // true only after load() resolves
+  let clerkError = null;            // why it failed, if it did
+  let pendingSignIn = false;        // user clicked before Clerk was ready
   let cache = { products: [], orders: [], messages: [], subs: [] };
 
   try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) { token = null; }
@@ -34,9 +37,39 @@
       s.dataset.clerkPublishableKey = publishableKey;
       s.src = `https://${frontendApi}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
       s.onload = () => resolve(window.Clerk);
-      s.onerror = () => reject(new Error('Clerk failed to load'));
+      s.onerror = () => reject(new Error('Clerk script blocked or unreachable'));
       document.head.appendChild(s);
+      setTimeout(() => {
+        if (!window.Clerk) reject(new Error('Clerk script did not load in time'));
+      }, 12000);
     });
+  }
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)),
+    ]);
+  }
+
+  /**
+   * Open Clerk's sign-in. The modal occasionally refuses to mount (blocked
+   * third-party frames, unregistered origin); fall back to the hosted page,
+   * and tell the user if even that is impossible.
+   */
+  function openClerkSignIn() {
+    if (!clerkReady || !clerk) { pendingSignIn = true; return; }
+    try {
+      clerk.openSignIn({ afterSignInUrl: window.location.href });
+    } catch (e) {
+      try {
+        clerk.redirectToSignIn({ afterSignInUrl: window.location.href });
+      } catch (e2) {
+        clerkError = e2.message || e.message;
+        renderLogin();
+      }
+    }
   }
 
   /* ---------------------------------------------------- helpers -- */
@@ -118,19 +151,37 @@
   function renderLogin() {
     const panel = $('#loginPanel');
     if (cfg.auth === 'clerk') {
+      if (clerkError) {
+        panel.innerHTML = `
+          <h1>Sign-in unavailable</h1>
+          <p style="font-size:var(--fs-sm);color:var(--red-500);text-align:center;margin-bottom:var(--space-5)">
+            ${clerkError}</p>
+          <div class="login-hint" style="margin-bottom:var(--space-5)">
+            Usually one of: this site's address is not listed in Clerk under
+            <strong>Domains</strong>, the keys on the server are for a different
+            Clerk instance, or a browser extension is blocking the script.
+          </div>
+          <button class="btn btn--gold btn--block" type="button" id="clerkRetry">Try again</button>`;
+        $('#clerkRetry').addEventListener('click', startClerk);
+        return;
+      }
+
+      const waiting = !clerkReady;
       panel.innerHTML = `
         <h1>Store dashboard</h1>
         <p style="font-size:var(--fs-sm);color:var(--text-secondary);text-align:center;margin-bottom:var(--space-6)">
           We email you a one-time code.
         </p>
-        <button class="btn btn--gold btn--block" type="button" id="clerkSignIn">Sign in with email</button>
+        <button class="btn btn--gold btn--block" type="button" id="clerkSignIn"
+                ${waiting ? 'disabled' : ''}>
+          ${waiting ? 'Preparing sign-in…' : 'Sign in with email'}
+        </button>
         <div class="login-hint">
           Only addresses in the admin list can open this dashboard. Signing in
           with any other account is refused.
         </div>`;
-      $('#clerkSignIn').addEventListener('click', () => {
-        if (clerk) clerk.openSignIn({ afterSignInUrl: window.location.href });
-      });
+      const btn = $('#clerkSignIn');
+      if (btn) btn.addEventListener('click', openClerkSignIn);
     } else {
       panel.innerHTML = `
         <h1>Store dashboard</h1>
@@ -430,6 +481,53 @@
 
   $('#refreshBtn').addEventListener('click', loadAll);
 
+  /** Load and start Clerk, updating the login panel as it goes. */
+  async function startClerk() {
+    clerkError = null;
+    clerkReady = false;
+    renderLogin();
+
+    try {
+      await withTimeout(
+        loadClerkScript(cfg.clerk.publishableKey, cfg.clerk.frontendApi),
+        14000, 'Loading sign-in');
+
+      const instance = window.Clerk;
+      // Only publish the instance once load() has actually finished —
+      // calling openSignIn() before then silently does nothing.
+      await withTimeout(instance.load({ afterSignOutUrl: window.location.href }),
+                        14000, 'Starting sign-in');
+
+      clerk = instance;
+      clerkReady = true;
+      renderLogin();
+
+      clerk.addListener(async () => {
+        if (clerk.user && $('#appView').hidden) {
+          try {
+            const me = await api('/api/auth/me');
+            showApp(me.user);
+          } catch (e) { /* showDenied handles 403 */ }
+        }
+      });
+
+      if (clerk.user) {
+        try {
+          const me = await api('/api/auth/me');
+          showApp(me.user);
+        } catch (e) { /* handled */ }
+      } else if (pendingSignIn) {
+        // They clicked while we were still loading — honour it now.
+        pendingSignIn = false;
+        openClerkSignIn();
+      }
+    } catch (e) {
+      clerkError = e.message;
+      clerkReady = false;
+      renderLogin();
+    }
+  }
+
   /* -------------------------------------------------------- boot -- */
   (async function boot() {
     try {
@@ -439,28 +537,7 @@
     renderLogin();
 
     if (cfg.auth === 'clerk' && cfg.clerk && cfg.clerk.enabled) {
-      try {
-        await loadClerkScript(cfg.clerk.publishableKey, cfg.clerk.frontendApi);
-        clerk = window.Clerk;
-        await clerk.load({ afterSignOutUrl: window.location.href });
-        clerk.addListener(async () => {
-          if (clerk.user && $('#appView').hidden) {
-            try {
-              const me = await api('/api/auth/me');
-              showApp(me.user);
-            } catch (e) { /* showDenied already ran on 403 */ }
-          }
-        });
-        if (clerk.user) {
-          try {
-            const me = await api('/api/auth/me');
-            showApp(me.user);
-          } catch (e) { /* handled */ }
-        }
-      } catch (e) {
-        $('#loginPanel').innerHTML =
-          `<h1>Clerk could not load</h1><p style="font-size:var(--fs-sm);color:var(--red-500)">${e.message}</p>`;
-      }
+      startClerk();
       return;
     }
 
