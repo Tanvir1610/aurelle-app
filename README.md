@@ -39,10 +39,25 @@ npm install jsdom                # test-only
 node tools/smoke-test.mjs        # 36 — every page renders
 node tools/interaction-test.mjs  # 12 — filters, cart, validation
 node tools/api-test.mjs          # 50 — endpoints, auth, validation, traversal
+node tools/auth-test.mjs         # 35 — admin credentials and lockout cases
 node tools/integration-test.mjs  # 19 — UI → HTTP → database → dashboard
 ```
 
-117 assertions, all passing.
+152 assertions, all passing. Or just `npm test`.
+
+## Admin credentials
+
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` are re-applied on **every** boot, so changing
+them and restarting always works. Set both or neither. Emails are stored
+lowercase, so capitalisation never locks you out. Configuring a real account
+deletes the published `admin@aurelle.local` default.
+
+Locked out with no way to restart:
+
+```bash
+node tools/set-password.mjs                        # list accounts
+node tools/set-password.mjs you@shop.com NewPass1  # reset or create
+```
 
 ---
 

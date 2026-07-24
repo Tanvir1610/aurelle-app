@@ -9,10 +9,13 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node --watch server/server.js",
-    "test": "node tools/smoke-test.mjs && node tools/interaction-test.mjs",
+    "test": "node tools/smoke-test.mjs && node tools/interaction-test.mjs && node tools/api-test.mjs && node tools/auth-test.mjs && node tools/integration-test.mjs",
     "test:api": "node tools/api-test.mjs",
     "seed:demo": "node tools/seed-demo.mjs",
-    "art": "python3 tools/generate_art.py"
+    "art": "python3 tools/generate_art.py",
+    "test:auth": "node tools/auth-test.mjs",
+    "test:integration": "node tools/integration-test.mjs",
+    "password": "node tools/set-password.mjs"
   },
   "dependencies": {
     "jsdom": "^29.1.1"

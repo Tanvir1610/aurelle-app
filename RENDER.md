@@ -91,10 +91,13 @@ crash on boot.
 `SESSION_SECRET` matters too. Left unset it regenerates on every restart, which
 signs you out of the dashboard each time.
 
-**Set `ADMIN_PASSWORD` before the first deploy, not after.** The admin account is
-created on first boot and is not overwritten later. Deploy once with the
-defaults and `admin@aurelle.local` / `aurelle-admin` is live on the public
-internet until you wipe the database.
+Set both `ADMIN_EMAIL` and `ADMIN_PASSWORD`, or neither. Setting only one is
+ignored — the boot log tells you which is missing.
+
+Credentials are reconciled on **every** boot, so changing them later and
+redeploying works. When you configure a real account, the published
+`admin@aurelle.local` default is deleted automatically, so it cannot be used
+against your deployment.
 
 ## Step 4 — Health check
 
@@ -177,10 +180,22 @@ too aggressive. `git add -f server/db.js` and push.
 **First load takes a minute** — free instance waking from spin-down. Only the
 first request after 15 idle minutes is slow.
 
-**Dashboard login rejects your password** — the admin row was created on an
-earlier boot with different values. On free, redeploy (the database resets). On
-paid, open the Shell and run:
-`node -e "import('./server/db.js').then(d=>{const{salt,hash}=d.hashPassword('YOUR-NEW-PASSWORD');d.db.prepare('UPDATE admins SET pass_hash=?,pass_salt=?').run(hash,salt);console.log('done')})"`
+**Dashboard login rejects your password** — set `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` in Render's Environment tab and redeploy. Credentials are
+re-applied on every boot, so this always takes effect. Two things to check:
+set *both* variables (one alone is ignored, and the log says so), and note that
+emails are stored lowercase, so `Owner@Shop.com` and `owner@shop.com` are the
+same account.
+
+If you cannot restart, open Render's **Shell** tab:
+
+```bash
+node tools/set-password.mjs                        # list accounts
+node tools/set-password.mjs you@shop.com NewPass1  # reset one
+```
+
+On a free instance the shell change is lost at the next restart — put the
+credentials in the environment variables instead.
 
 ---
 
