@@ -29,6 +29,9 @@ services:
     branch: main
 
     # No dependencies to install — the app is pure Node.
+    # Must be empty. There are no dependencies. If Render auto-detects and
+    # runs "yarn" or "npm install", clear this field in the dashboard —
+    # Settings -> Build Command -> leave blank.
     buildCommand: ""
     startCommand: node server/server.js
 

@@ -111,19 +111,43 @@ CREATE TABLE IF NOT EXISTS admins (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+`);
+
+/* ------------------------------------------------------- migrations --
+   CREATE TABLE IF NOT EXISTS does nothing when a table already exists, so
+   a database made by an older build keeps its old columns. Add anything
+   missing here — and crucially do it BEFORE creating indexes, because an
+   index over a column that does not exist yet aborts startup.
+
+   Each entry is idempotent: adding a column that is already there is
+   skipped, so this is safe to run on every boot forever.                */
+const COLUMN_MIGRATIONS = [
+  ['orders', 'clerk_user_id', 'TEXT'],
+];
+
+function migrate() {
+  for (const [table, column, type] of COLUMN_MIGRATIONS) {
+    try {
+      const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+      if (cols.length && !cols.includes(column)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+        console.log(`[db] migrated: added ${table}.${column}`);
+      }
+    } catch (e) {
+      console.error(`[db] migration ${table}.${column} failed: ${e.message}`);
+    }
+  }
+}
+
+migrate();
+
+/* Indexes come last, once every column they reference is guaranteed. */
+db.exec(`
 CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_clerk   ON orders(clerk_user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_items_order    ON order_items(order_id);
 `);
-
-/* Older databases predate clerk_user_id — add it in place. */
-try {
-  const cols = db.prepare('PRAGMA table_info(orders)').all().map(c => c.name);
-  if (!cols.includes('clerk_user_id')) {
-    db.exec('ALTER TABLE orders ADD COLUMN clerk_user_id TEXT');
-  }
-} catch (e) { /* fresh database, nothing to migrate */ }
 
 /* -------------------------------------------------------- passwords -- */
 export function hashPassword(plain, salt = randomBytes(16).toString('hex')) {
