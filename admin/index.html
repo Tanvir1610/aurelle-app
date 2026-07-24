@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — Aurelle</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1512'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8935a' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- ============================================ LOGIN ============ -->
+<div class="login-wrap" id="loginView">
+  <form class="login-card" id="loginForm" novalidate>
+    <span class="wordmark">Aurelle<small>FINE FASHION JEWELLERY</small></span>
+    <h1>Store dashboard</h1>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+    </div>
+
+    <div id="loginError" style="display:none;color:var(--red-500);font-size:var(--fs-xs);margin-bottom:var(--space-4)"></div>
+
+    <button class="btn btn--primary btn--block" type="submit" id="loginBtn">Sign in</button>
+
+    <div class="login-hint">
+      First run seeds an account: <code>admin@aurelle.local</code> / <code>aurelle-admin</code>.
+      Set <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code> before deploying anywhere public.
+    </div>
+  </form>
+</div>
+
+<!-- ============================================ APP ============== -->
+<div class="shell" id="appView" hidden>
+
+  <aside class="side">
+    <span class="wordmark">Aurelle<small>DASHBOARD</small></span>
+    <nav>
+      <button data-view="overview" class="is-active">Overview</button>
+      <button data-view="orders">Orders <span class="pill" id="pillOrders" hidden>0</span></button>
+      <button data-view="products">Products</button>
+      <button data-view="messages">Messages <span class="pill" id="pillMsgs" hidden>0</span></button>
+      <button data-view="subscribers">Subscribers</button>
+    </nav>
+    <div class="side__foot">
+      <strong id="whoName">—</strong>
+      <span id="whoEmail">—</span>
+      <button type="button" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <section data-panel="overview">
+      <div class="page-head">
+        <div><h2>Overview</h2><p>Live figures from the orders table.</p></div>
+        <button class="btn btn--ghost btn--sm" type="button" id="refreshBtn">Refresh</button>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="two-col">
+        <div class="card-box">
+          <h3>Revenue, last 14 days</h3>
+          <div class="chart-wrap"><div class="chart" id="chart"></div></div>
+        </div>
+        <div class="card-box">
+          <h3>Best sellers</h3>
+          <table class="tbl"><tbody id="topProducts"></tbody></table>
+        </div>
+      </div>
+
+      <div class="card-box">
+        <h3>Low stock</h3>
+        <table class="tbl"><tbody id="lowStock"></tbody></table>
+      </div>
+    </section>
+
+    <!-- ORDERS -->
+    <section data-panel="orders" hidden>
+      <div class="page-head">
+        <div><h2>Orders</h2><p>Change a status here and the customer's tracking page updates.</p></div>
+      </div>
+      <div class="toolbar">
+        <input type="search" id="orderSearch" placeholder="Search reference, name or email">
+        <select id="orderStatus">
+          <option value="all">All statuses</option>
+          <option value="placed">Placed</option>
+          <option value="packed">Packed</option>
+          <option value="shipped">Shipped</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="card-box">
+        <table class="tbl">
+          <thead><tr><th>Reference</th><th>Customer</th><th>Items</th><th class="num">Total</th><th>Status</th><th>Placed</th></tr></thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PRODUCTS -->
+    <section data-panel="products" hidden>
+      <div class="page-head">
+        <div><h2>Products</h2><p>Edits go live on the storefront immediately.</p></div>
+        <button class="btn btn--gold btn--sm" type="button" id="newProductBtn">Add product</button>
+      </div>
+      <div class="toolbar"><input type="search" id="productSearch" placeholder="Search products"></div>
+      <div class="card-box">
+        <table class="tbl">
+          <thead><tr><th></th><th>Name</th><th>Category</th><th class="num">Price</th><th class="num">MRP</th><th class="num">Stock</th><th></th></tr></thead>
+          <tbody id="productsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- MESSAGES -->
+    <section data-panel="messages" hidden>
+      <div class="page-head">
+        <div><h2>Messages</h2><p>Enquiries from the storefront contact form.</p></div>
+      </div>
+      <div class="card-box" id="messagesBody"></div>
+    </section>
+
+    <!-- SUBSCRIBERS -->
+    <section data-panel="subscribers" hidden>
+      <div class="page-head">
+        <div><h2>Subscribers</h2><p>Newsletter signups.</p></div>
+        <button class="btn btn--ghost btn--sm" type="button" id="exportSubs">Export CSV</button>
+      </div>
+      <div class="card-box">
+        <table class="tbl">
+          <thead><tr><th>Email</th><th>Joined</th></tr></thead>
+          <tbody id="subsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- PRODUCT EDITOR -->
+<div class="modal-scrim" id="productScrim">
+  <form class="modal" id="productForm" novalidate>
+    <h3 id="productModalTitle">Add product</h3>
+    <div class="field">
+      <label for="pSlug">Slug</label>
+      <input id="pSlug" required placeholder="rosevine-necklace-set">
+      <span class="field__err">Lowercase letters, numbers and hyphens only</span>
+    </div>
+    <div class="field"><label for="pName">Name</label><input id="pName" required><span class="field__err">Name is required</span></div>
+    <div class="field-row">
+      <div class="field"><label for="pCat">Category</label>
+        <select id="pCat">
+          <option>Necklace Sets</option><option>Earrings</option><option>Rings</option>
+          <option>Bracelets</option><option>Chokers</option><option>Pendants</option>
+          <option>Maang Tikka</option><option>Bangles</option>
+        </select>
+      </div>
+      <div class="field"><label for="pMetal">Metal</label>
+        <select id="pMetal">
+          <option>Gold</option><option>Rose Gold</option><option>Silver</option>
+          <option>Pearl</option><option>Emerald</option><option>Ruby</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="pPrice">Price (₹)</label><input id="pPrice" type="number" min="1" required><span class="field__err">Must be above zero</span></div>
+      <div class="field"><label for="pMrp">MRP (₹)</label><input id="pMrp" type="number" min="1" required><span class="field__err">Cannot be below the price</span></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="pStock">Stock</label><input id="pStock" type="number" min="0" value="25"></div>
+      <div class="field"><label for="pBadge">Badge</label>
+        <select id="pBadge"><option value="">None</option><option>New</option><option>Bestseller</option></select>
+      </div>
+    </div>
+    <div class="field"><label for="pBlurb">Description</label><textarea id="pBlurb" style="min-height:90px"></textarea></div>
+    <div id="productError" style="display:none;color:var(--red-500);font-size:var(--fs-xs)"></div>
+    <div class="modal__actions">
+      <button class="btn btn--ghost btn--sm" type="button" id="cancelProduct">Cancel</button>
+      <button class="btn btn--gold btn--sm" type="submit">Save product</button>
+    </div>
+  </form>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

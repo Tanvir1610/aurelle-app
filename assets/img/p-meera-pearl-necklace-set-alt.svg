@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-label="Meera Pearl Necklace Set">
+  <defs>
+    <radialGradient id="g311" cx="50%" cy="38%" r="78%">
+      <stop offset="0%" stop-color="#ddd2c1"/>
+      <stop offset="100%" stop-color="#faf6f0"/>
+    </radialGradient>
+    <linearGradient id="m311" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dcc08a"/>
+      <stop offset="45%" stop-color="#b8935a"/>
+      <stop offset="100%" stop-color="#9c7a44"/>
+    </linearGradient>
+    <radialGradient id="v311" cx="50%" cy="50%" r="72%">
+      <stop offset="60%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#3d352e" stop-opacity="0.13"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#g311)"/>
+  <circle cx="400" cy="352" r="266" fill="#fff" opacity="0.16"/>
+  <path d="M 202.7 198.7 A 210 150 0 0 0 597.3 198.7" fill="none" stroke="url(#m311)" stroke-width="2.2" stroke-linecap="round"/><circle cx="202.7" cy="198.7" r="4.5" fill="url(#m311)"/><circle cx="218.1" cy="175.0" r="5.0" fill="url(#m311)"/><circle cx="239.1" cy="153.6" r="5.5" fill="url(#m311)"/><circle cx="265.0" cy="135.1" r="5.9" fill="url(#m311)"/><circle cx="295.0" cy="120.1" r="6.3" fill="url(#m311)"/><circle cx="328.2" cy="109.0" r="6.5" fill="url(#m311)"/><circle cx="363.5" cy="102.3" r="6.7" fill="url(#m311)"/><circle cx="400.0" cy="100.0" r="6.8" fill="url(#m311)"/><circle cx="436.5" cy="102.3" r="6.7" fill="url(#m311)"/><circle cx="471.8" cy="109.0" r="6.5" fill="url(#m311)"/><circle cx="505.0" cy="120.1" r="6.3" fill="url(#m311)"/><circle cx="535.0" cy="135.1" r="5.9" fill="url(#m311)"/><circle cx="560.9" cy="153.6" r="5.5" fill="url(#m311)"/><circle cx="581.9" cy="175.0" r="5.0" fill="url(#m311)"/><circle cx="597.3" cy="198.7" r="4.5" fill="url(#m311)"/><path d="M 400 400 L 400 432" stroke="url(#m311)" stroke-width="2.4"/><polygon points="400.0,426.0 421.4,446.6 442.0,468.0 421.4,489.4 400.0,510.0 378.6,489.4 358.0,468.0 378.6,446.6" fill="url(#m311)" opacity="0.95"/><circle cx="390.8" cy="457.1" r="8.4" fill="#fff" opacity="0.55"/><polygon points="340.0,357.0 347.6,364.4 355.0,372.0 347.6,379.6 340.0,387.0 332.4,379.6 325.0,372.0 332.4,364.4" fill="url(#m311)" opacity="0.95"/><circle cx="336.7" cy="368.1" r="3.0" fill="#fff" opacity="0.55"/><polygon points="460.0,357.0 467.6,364.4 475.0,372.0 467.6,379.6 460.0,387.0 452.4,379.6 445.0,372.0 452.4,364.4" fill="url(#m311)" opacity="0.95"/><circle cx="456.7" cy="368.1" r="3.0" fill="#fff" opacity="0.55"/>
+  <rect width="800" height="800" fill="url(#v311)"/>
+</svg>

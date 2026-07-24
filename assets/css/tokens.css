@@ -1,0 +1,273 @@
+/* Aurelle webfonts — Google Fonts.
+   Display: Cormorant Garamond (high-contrast elegant serif)
+   Sans:    Jost (refined geometric grotesque)
+   Mono:    Space Mono (spec/label mono) */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Jost:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
+/* ============================================================
+   AURELLE · COLOR TOKENS
+   Warm ivory canvas, near-black ink, champagne-gold accent,
+   and a jewel-tone family (ruby / emerald / sapphire / rose).
+   ============================================================ */
+:root {
+  /* — Base neutrals (warm) — */
+  --ink-900: #1a1512;   /* primary text, headings */
+  --ink-700: #3d352e;   /* strong body */
+  --ink-500: #6f645a;   /* secondary text */
+  --ink-400: #938779;   /* muted / meta */
+  --ink-300: #c4b9ab;   /* disabled */
+  --ivory-050: #faf6f0; /* page canvas */
+  --ivory-100: #f4ede3; /* alt surface / sections */
+  --ivory-200: #ece2d4; /* hairline fills */
+  --cream-000: #ffffff; /* card surface */
+  --cream-050: #fdfbf7; /* raised card surface */
+  --line-200: #e7ddce;  /* borders */
+  --line-300: #d8ccb8;  /* strong borders */
+
+  /* — Champagne gold (brand accent) — */
+  --gold-100: #f3e7cf;
+  --gold-300: #dcc08a;
+  --gold-500: #b8935a; /* primary accent */
+  --gold-600: #9c7a44;
+  --gold-700: #7c5f31;
+
+  /* — Jewel tones (categories / editorial) — */
+  --rose-500: #c08a82;   /* rose gold */
+  --rose-100: #f4e3df;
+  --ruby-500: #8e2a3b;
+  --ruby-100: #f2dcdf;
+  --emerald-500: #2f5d4e;
+  --emerald-100: #dbe8e2;
+  --sapphire-500: #2a3e6b;
+  --sapphire-100: #dde2ee;
+
+  /* — Status — */
+  --green-500: #3f7d54;
+  --green-100: #e0efe4;
+  --red-500: #b23a48;    /* also sale price */
+  --red-100: #f6dde0;
+  --amber-500: #c08a2e;
+  --amber-100: #f6e9cf;
+  --blue-500: #3a6a9c;
+  --blue-100: #dde8f2;
+
+  /* ---- SEMANTIC ALIASES ---- */
+  --color-bg: var(--ivory-050);
+  --color-surface: var(--cream-000);
+  --color-surface-raised: var(--cream-050);
+  --color-surface-alt: var(--ivory-100);
+  --color-surface-sunken: var(--ivory-200);
+
+  --text-primary: var(--ink-900);
+  --text-secondary: var(--ink-500);
+  --text-muted: var(--ink-400);
+  --text-disabled: var(--ink-300);
+  --text-inverse: var(--ivory-050);
+  --text-accent: var(--gold-700);
+
+  --accent: var(--gold-500);
+  --accent-strong: var(--gold-600);
+  --accent-soft: var(--gold-100);
+  --accent-contrast: #ffffff;
+
+  --border: var(--line-200);
+  --border-strong: var(--line-300);
+  --border-accent: var(--gold-500);
+
+  --price-sale: var(--red-500);
+  --price-was: var(--ink-400);
+
+  --success: var(--green-500);
+  --success-soft: var(--green-100);
+  --danger: var(--red-500);
+  --danger-soft: var(--red-100);
+  --warning: var(--amber-500);
+  --warning-soft: var(--amber-100);
+  --info: var(--blue-500);
+  --info-soft: var(--blue-100);
+
+  --overlay: rgba(26, 21, 18, 0.48);
+  --focus-ring: color-mix(in oklab, var(--gold-500) 55%, transparent);
+}
+
+/* Dark-mode-ready scope (opt-in via [data-theme="dark"]) */
+[data-theme="dark"] {
+  --color-bg: #14100d;
+  --color-surface: #1e1813;
+  --color-surface-raised: #241d17;
+  --color-surface-alt: #1a140f;
+  --color-surface-sunken: #100c09;
+  --text-primary: #f6efe4;
+  --text-secondary: #c3b6a4;
+  --text-muted: #8f8271;
+  --text-inverse: #14100d;
+  --border: #322a20;
+  --border-strong: #43392b;
+  --accent: var(--gold-300);
+  --accent-strong: var(--gold-500);
+  --overlay: rgba(0, 0, 0, 0.6);
+}
+/* ============================================================
+   AURELLE · TYPOGRAPHY TOKENS
+   Display serif (Cormorant Garamond) + UI sans (Jost).
+   Eyebrows / labels are uppercase Jost with wide tracking.
+   ============================================================ */
+:root {
+  --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
+  --font-sans: 'Jost', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+
+  /* Fluid-ish type scale (px anchors) */
+  --fs-display: 72px;   /* hero display serif */
+  --fs-h1: 52px;
+  --fs-h2: 38px;
+  --fs-h3: 28px;
+  --fs-h4: 22px;
+  --fs-h5: 18px;
+  --fs-body-lg: 18px;
+  --fs-body: 16px;
+  --fs-sm: 14px;
+  --fs-xs: 12px;
+  --fs-eyebrow: 11px;
+
+  /* Weights */
+  --fw-light: 300;      /* @kind font */
+  --fw-regular: 400;    /* @kind font */
+  --fw-medium: 500;     /* @kind font */
+  --fw-semibold: 600;   /* @kind font */
+  --fw-bold: 700;       /* @kind font */
+
+  /* Line heights */
+  --lh-tight: 1.05;     /* @kind font */
+  --lh-snug: 1.2;       /* @kind font */
+  --lh-normal: 1.5;     /* @kind font */
+  --lh-relaxed: 1.7;    /* @kind font */
+
+  /* Letter spacing */
+  --ls-tight: -0.01em;  /* @kind font */
+  --ls-normal: 0;       /* @kind font */
+  --ls-wide: 0.08em;    /* @kind font */
+  --ls-wider: 0.18em;   /* @kind font */
+
+  /* Semantic roles */
+  --text-display-font: var(--font-display);
+  --text-heading-font: var(--font-display);
+  --text-body-font: var(--font-sans);
+  --text-eyebrow-font: var(--font-sans);
+}
+
+/* Reusable text-role classes (optional helpers for cards/kits) */
+.t-eyebrow { font-family: var(--font-sans); font-size: var(--fs-eyebrow); font-weight: var(--fw-medium); letter-spacing: var(--ls-wider); text-transform: uppercase; color: var(--text-accent); }
+.t-display { font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-display); line-height: var(--lh-tight); letter-spacing: var(--ls-tight); }
+.t-h1 { font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-h1); line-height: var(--lh-snug); }
+.t-h2 { font-family: var(--font-display); font-weight: var(--fw-medium); font-size: var(--fs-h2); line-height: var(--lh-snug); }
+.t-h3 { font-family: var(--font-display); font-weight: var(--fw-semibold); font-size: var(--fs-h3); line-height: var(--lh-snug); }
+.t-body { font-family: var(--font-sans); font-weight: var(--fw-regular); font-size: var(--fs-body); line-height: var(--lh-relaxed); color: var(--text-secondary); }
+.t-sm { font-family: var(--font-sans); font-size: var(--fs-sm); line-height: var(--lh-normal); }
+/* ============================================================
+   AURELLE · SPACING, RADIUS, GRID
+   8px base rhythm. Luxury layouts favour generous whitespace.
+   ============================================================ */
+:root {
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* Layout */
+  --container-max: 1360px;
+  --container-narrow: 820px;
+  --gutter: 24px;
+  --section-y: 96px;      /* vertical section padding (desktop) */
+  --section-y-sm: 56px;
+
+  /* Radius — restrained, editorial */
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+}
+/* ============================================================
+   AURELLE · SHADOW & MOTION
+   Soft, warm-tinted shadows. Slow, expressive easing.
+   ============================================================ */
+:root {
+  /* Warm-tinted elevation */
+  --shadow-xs: 0 1px 2px rgba(45, 33, 22, 0.06);
+  --shadow-sm: 0 2px 8px rgba(45, 33, 22, 0.07);
+  --shadow-md: 0 10px 28px -10px rgba(45, 33, 22, 0.16);
+  --shadow-lg: 0 24px 60px -20px rgba(45, 33, 22, 0.22);
+  --shadow-xl: 0 40px 90px -28px rgba(45, 33, 22, 0.28);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-gold: 0 8px 30px -8px rgba(184, 147, 90, 0.4);
+
+  /* Motion — expressive, premium */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);   /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* @kind other */
+  --ease-soft: cubic-bezier(0.33, 1, 0.68, 1);   /* @kind other */
+
+  --dur-fast: 160ms;    /* @kind other */
+  --dur-base: 280ms;    /* @kind other */
+  --dur-slow: 500ms;    /* @kind other */
+  --dur-slower: 800ms;  /* @kind other */
+
+  /* Interaction primitives */
+  --hover-lift: -4px;   /* @kind other */
+  --press-scale: 0.97;  /* @kind other */
+  --img-zoom: 1.06;     /* @kind other */
+  --z-drawer: 1000;     /* @kind other */
+  --z-modal: 1100;      /* @kind other */
+  --z-toast: 1200;      /* @kind other */
+  --z-header: 900;      /* @kind other */
+}
+/* ============================================================
+   AURELLE · BASE RESET & ELEMENT DEFAULTS
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  font-weight: var(--fw-regular);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5 { font-family: var(--font-display); font-weight: var(--fw-medium); color: var(--text-primary); margin: 0; line-height: var(--lh-snug); }
+p { margin: 0; text-wrap: pretty; }
+img { max-width: 100%; display: block; }
+
+/* Links — defined so consumer pages never get browser-default blue */
+a { color: var(--text-accent); text-decoration: none; transition: color var(--dur-fast) var(--ease-out); }
+a:hover { color: var(--accent-strong); }
+
+::selection { background: var(--gold-300); color: var(--ink-900); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Utility layout primitives (used by cards / kits) */
+.au-container { max-width: var(--container-max); margin-inline: auto; padding-inline: var(--gutter); }
+.au-eyebrow { font-family: var(--font-sans); font-size: var(--fs-eyebrow); font-weight: var(--fw-medium); letter-spacing: var(--ls-wider); text-transform: uppercase; color: var(--text-accent); }
+
+/* Component animation keyframes (referenced by inline styles) */
+@keyframes au-spin { to { transform: rotate(360deg); } }
+@keyframes au-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes au-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes au-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

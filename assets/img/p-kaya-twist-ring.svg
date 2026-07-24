@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-label="Kaya Twist Ring">
+  <defs>
+    <radialGradient id="g126" cx="50%" cy="38%" r="78%">
+      <stop offset="0%" stop-color="#f8e9e5"/>
+      <stop offset="100%" stop-color="#dfbdb6"/>
+    </radialGradient>
+    <linearGradient id="m126" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dcc08a"/>
+      <stop offset="45%" stop-color="#b8935a"/>
+      <stop offset="100%" stop-color="#9c7a44"/>
+    </linearGradient>
+    <radialGradient id="v126" cx="50%" cy="50%" r="72%">
+      <stop offset="60%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#3d352e" stop-opacity="0.13"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#g126)"/>
+  <circle cx="400" cy="352" r="266" fill="#fff" opacity="0.16"/>
+  <ellipse cx="400" cy="360" rx="128" ry="132" fill="none" stroke="url(#m126)" stroke-width="13"/><ellipse cx="400" cy="360" rx="128" ry="132" fill="none" stroke="#faf6f0" stroke-width="2" opacity="0.35"/><path d="M 356 236 L 400 196 L 444 236" fill="none" stroke="url(#m126)" stroke-width="4"/><polygon points="400.0,156.0 426.5,181.5 452.0,208.0 426.5,234.5 400.0,260.0 373.5,234.5 348.0,208.0 373.5,181.5" fill="url(#m126)" opacity="0.95"/><circle cx="388.6" cy="194.5" r="10.4" fill="#fff" opacity="0.55"/>
+  <rect width="800" height="800" fill="url(#v126)"/>
+</svg>

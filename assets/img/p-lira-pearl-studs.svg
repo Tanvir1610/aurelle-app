@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-label="Lira Pearl Studs">
+  <defs>
+    <radialGradient id="g124" cx="50%" cy="38%" r="78%">
+      <stop offset="0%" stop-color="#faf6f0"/>
+      <stop offset="100%" stop-color="#ddd2c1"/>
+    </radialGradient>
+    <linearGradient id="m124" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dcc08a"/>
+      <stop offset="45%" stop-color="#b8935a"/>
+      <stop offset="100%" stop-color="#9c7a44"/>
+    </linearGradient>
+    <radialGradient id="v124" cx="50%" cy="50%" r="72%">
+      <stop offset="60%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#3d352e" stop-opacity="0.13"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#g124)"/>
+  <circle cx="400" cy="352" r="266" fill="#fff" opacity="0.16"/>
+  <polygon points="364.0,280.0 374.2,289.8 384.0,300.0 374.2,310.2 364.0,320.0 353.8,310.2 344.0,300.0 353.8,289.8" fill="url(#m124)" opacity="0.95"/><circle cx="359.6" cy="294.8" r="4.0" fill="#fff" opacity="0.55"/><polygon points="342.0,318.1 352.2,327.9 362.0,338.1 352.2,348.3 342.0,358.1 331.8,348.3 322.0,338.1 331.8,327.9" fill="url(#m124)" opacity="0.95"/><circle cx="337.6" cy="332.9" r="4.0" fill="#fff" opacity="0.55"/><polygon points="298.0,318.1 308.2,327.9 318.0,338.1 308.2,348.3 298.0,358.1 287.8,348.3 278.0,338.1 287.8,327.9" fill="url(#m124)" opacity="0.95"/><circle cx="293.6" cy="332.9" r="4.0" fill="#fff" opacity="0.55"/><polygon points="276.0,280.0 286.2,289.8 296.0,300.0 286.2,310.2 276.0,320.0 265.8,310.2 256.0,300.0 265.8,289.8" fill="url(#m124)" opacity="0.95"/><circle cx="271.6" cy="294.8" r="4.0" fill="#fff" opacity="0.55"/><polygon points="298.0,241.9 308.2,251.7 318.0,261.9 308.2,272.1 298.0,281.9 287.8,272.1 278.0,261.9 287.8,251.7" fill="url(#m124)" opacity="0.95"/><circle cx="293.6" cy="256.7" r="4.0" fill="#fff" opacity="0.55"/><polygon points="342.0,241.9 352.2,251.7 362.0,261.9 352.2,272.1 342.0,281.9 331.8,272.1 322.0,261.9 331.8,251.7" fill="url(#m124)" opacity="0.95"/><circle cx="337.6" cy="256.7" r="4.0" fill="#fff" opacity="0.55"/><polygon points="320.0,270.0 335.3,284.7 350.0,300.0 335.3,315.3 320.0,330.0 304.7,315.3 290.0,300.0 304.7,284.7" fill="url(#m124)" opacity="0.95"/><circle cx="313.4" cy="292.2" r="6.0" fill="#fff" opacity="0.55"/><polygon points="524.0,280.0 534.2,289.8 544.0,300.0 534.2,310.2 524.0,320.0 513.8,310.2 504.0,300.0 513.8,289.8" fill="url(#m124)" opacity="0.95"/><circle cx="519.6" cy="294.8" r="4.0" fill="#fff" opacity="0.55"/><polygon points="502.0,318.1 512.2,327.9 522.0,338.1 512.2,348.3 502.0,358.1 491.8,348.3 482.0,338.1 491.8,327.9" fill="url(#m124)" opacity="0.95"/><circle cx="497.6" cy="332.9" r="4.0" fill="#fff" opacity="0.55"/><polygon points="458.0,318.1 468.2,327.9 478.0,338.1 468.2,348.3 458.0,358.1 447.8,348.3 438.0,338.1 447.8,327.9" fill="url(#m124)" opacity="0.95"/><circle cx="453.6" cy="332.9" r="4.0" fill="#fff" opacity="0.55"/><polygon points="436.0,280.0 446.2,289.8 456.0,300.0 446.2,310.2 436.0,320.0 425.8,310.2 416.0,300.0 425.8,289.8" fill="url(#m124)" opacity="0.95"/><circle cx="431.6" cy="294.8" r="4.0" fill="#fff" opacity="0.55"/><polygon points="458.0,241.9 468.2,251.7 478.0,261.9 468.2,272.1 458.0,281.9 447.8,272.1 438.0,261.9 447.8,251.7" fill="url(#m124)" opacity="0.95"/><circle cx="453.6" cy="256.7" r="4.0" fill="#fff" opacity="0.55"/><polygon points="502.0,241.9 512.2,251.7 522.0,261.9 512.2,272.1 502.0,281.9 491.8,272.1 482.0,261.9 491.8,251.7" fill="url(#m124)" opacity="0.95"/><circle cx="497.6" cy="256.7" r="4.0" fill="#fff" opacity="0.55"/><polygon points="480.0,270.0 495.3,284.7 510.0,300.0 495.3,315.3 480.0,330.0 464.7,315.3 450.0,300.0 464.7,284.7" fill="url(#m124)" opacity="0.95"/><circle cx="473.4" cy="292.2" r="6.0" fill="#fff" opacity="0.55"/>
+  <rect width="800" height="800" fill="url(#v124)"/>
+</svg>

@@ -1,0 +1,323 @@
+/**
+ * Aurelle — API server + static host.
+ * Pure node:http. Zero npm dependencies. Node 22+.
+ *
+ *   node server/server.js
+ *   PORT=4000 ADMIN_PASSWORD=secret node server/server.js
+ */
+import { createServer } from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { resolve, dirname, extname, normalize, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import * as DB from './db.js';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const PORT = Number(process.env.PORT || 3000);
+const SECRET = process.env.SESSION_SECRET || randomBytes(32).toString('hex');
+
+/* ============================================================ tokens == */
+/* Signed, expiring tokens. Stateless, so restarts do not log you out
+   mid-session unless SESSION_SECRET is left to rotate. */
+function sign(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const mac = createHmac('sha256', SECRET).update(body).digest('base64url');
+  return `${body}.${mac}`;
+}
+function verify(token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const [body, mac] = token.split('.');
+  const expect = createHmac('sha256', SECRET).update(body).digest('base64url');
+  const a = Buffer.from(mac || ''), b = Buffer.from(expect);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
+}
+
+/* =========================================================== helpers == */
+const json = (res, code, data) => {
+  const buf = Buffer.from(JSON.stringify(data));
+  res.writeHead(code, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': buf.length,
+    'cache-control': 'no-store',
+  });
+  res.end(buf);
+};
+const ok = (res, data) => json(res, 200, data);
+const bad = (res, msg, code = 400) => json(res, code, { error: msg });
+
+async function readBody(req, limit = 1_000_000) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > limit) throw new Error('Payload too large');
+    chunks.push(c);
+  }
+  if (!chunks.length) return {};
+  try { return JSON.parse(Buffer.concat(chunks).toString()); }
+  catch { throw new Error('Invalid JSON body'); }
+}
+
+function requireAuth(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+  return token ? verify(token) : null;
+}
+
+/* Validation shared with the frontend rules. */
+const isEmail = v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(v || '').trim());
+const isPhone = v => /^[6-9]\d{9}$/.test(String(v || '').replace(/\D/g, ''));
+const isPin   = v => /^\d{6}$/.test(String(v || '').trim());
+
+/* ============================================================ routes == */
+const routes = [];
+const route = (method, pattern, handler, opts = {}) =>
+  routes.push({ method, pattern, handler, auth: !!opts.auth });
+
+/* ---------------------------------------------------------- public --- */
+route('GET', /^\/api\/health$/, async (req, res) =>
+  ok(res, { status: 'up', time: new Date().toISOString() }));
+
+/* Drop-in replacement for the bundled AU_DATA object. */
+route('GET', /^\/api\/catalogue$/, async (req, res) => ok(res, DB.catalogue()));
+
+route('GET', /^\/api\/products$/, async (req, res, m, url) => {
+  let list = DB.listProducts();
+  const cat = url.searchParams.get('cat');
+  const metal = url.searchParams.get('metal');
+  const max = url.searchParams.get('max');
+  const q = url.searchParams.get('q');
+  if (cat)   list = list.filter(p => p.cat === cat);
+  if (metal) list = list.filter(p => p.metal === metal);
+  if (max)   list = list.filter(p => p.price <= Number(max));
+  if (q)     list = list.filter(p => (p.name + p.cat + p.blurb).toLowerCase().includes(q.toLowerCase()));
+  ok(res, { count: list.length, products: list });
+});
+
+route('GET', /^\/api\/products\/([\w-]+)$/, async (req, res, m) => {
+  const p = DB.getProduct(m[1]);
+  return p ? ok(res, p) : bad(res, 'Product not found', 404);
+});
+
+route('POST', /^\/api\/orders$/, async (req, res) => {
+  const b = await readBody(req);
+  const missing = ['firstName', 'lastName', 'email', 'phone', 'address', 'city', 'pincode']
+    .filter(f => !String(b[f] || '').trim());
+  if (missing.length) return bad(res, `Missing: ${missing.join(', ')}`);
+  if (!isEmail(b.email)) return bad(res, 'Invalid email address');
+  if (!isPhone(b.phone)) return bad(res, 'Invalid phone number');
+  if (!isPin(b.pincode)) return bad(res, 'Invalid pincode');
+  try {
+    const order = DB.createOrder(b);
+    json(res, 201, { ref: order.ref, total: order.total, status: order.status });
+  } catch (e) { bad(res, e.message); }
+});
+
+route('GET', /^\/api\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
+  const o = DB.getOrder(m[1].toUpperCase());
+  if (!o) return bad(res, 'Order not found', 404);
+  const steps = ['placed', 'packed', 'shipped', 'delivered'];
+  ok(res, {
+    ref: o.ref, status: o.status, total: o.total, placedAt: o.created_at,
+    city: o.city,
+    items: o.items.map(i => ({ name: i.name, qty: i.qty, finish: i.finish })),
+    timeline: steps.map((s, i) => ({
+      step: s,
+      done: o.status === 'cancelled' ? false : i <= steps.indexOf(o.status),
+    })),
+  });
+});
+
+route('POST', /^\/api\/newsletter$/, async (req, res) => {
+  const { email } = await readBody(req);
+  if (!isEmail(email)) return bad(res, 'Invalid email address');
+  DB.addSubscriber(email);
+  ok(res, { subscribed: true });
+});
+
+route('POST', /^\/api\/contact$/, async (req, res) => {
+  const b = await readBody(req);
+  if (!String(b.name || '').trim()) return bad(res, 'Name is required');
+  if (!isEmail(b.email)) return bad(res, 'Invalid email address');
+  if (!String(b.body || '').trim()) return bad(res, 'Message is required');
+  DB.createMessage(b);
+  json(res, 201, { received: true });
+});
+
+/* ------------------------------------------------------------ auth --- */
+route('POST', /^\/api\/auth\/login$/, async (req, res) => {
+  const { email, password } = await readBody(req);
+  const admin = DB.db.prepare('SELECT * FROM admins WHERE email = ?')
+    .get(String(email || '').toLowerCase().trim());
+  if (!admin || !DB.verifyPassword(String(password || ''), admin.pass_salt, admin.pass_hash)) {
+    return bad(res, 'Email or password is incorrect', 401);
+  }
+  const token = sign({ sub: admin.id, email: admin.email, name: admin.name,
+                       exp: Date.now() + 12 * 3600 * 1000 });
+  ok(res, { token, user: { email: admin.email, name: admin.name } });
+});
+
+route('GET', /^\/api\/auth\/me$/, async (req, res, m, url, user) =>
+  ok(res, { user: { email: user.email, name: user.name } }), { auth: true });
+
+/* ----------------------------------------------------------- admin --- */
+route('GET', /^\/api\/admin\/stats$/, async (req, res) => ok(res, DB.stats()), { auth: true });
+
+route('GET', /^\/api\/admin\/products$/, async (req, res) =>
+  ok(res, { products: DB.listProducts(true) }), { auth: true });
+
+route('POST', /^\/api\/admin\/products$/, async (req, res) => {
+  const b = await readBody(req);
+  for (const f of ['slug', 'name', 'cat', 'price', 'mrp', 'metal']) {
+    if (!String(b[f] ?? '').trim()) return bad(res, `Missing field: ${f}`);
+  }
+  if (Number(b.price) <= 0) return bad(res, 'Price must be above zero');
+  if (Number(b.mrp) < Number(b.price)) return bad(res, 'MRP cannot be below the selling price');
+  ok(res, DB.upsertProduct({ ...b, price: Number(b.price), mrp: Number(b.mrp), stock: Number(b.stock ?? 25) }));
+}, { auth: true });
+
+route('DELETE', /^\/api\/admin\/products\/([\w-]+)$/, async (req, res, m) =>
+  DB.deleteProduct(m[1]) ? ok(res, { archived: true }) : bad(res, 'Not found', 404), { auth: true });
+
+route('GET', /^\/api\/admin\/orders$/, async (req, res, m, url) =>
+  ok(res, { orders: DB.listOrders({ status: url.searchParams.get('status'),
+                                    q: url.searchParams.get('q') }) }), { auth: true });
+
+route('PATCH', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
+  const { status } = await readBody(req);
+  try {
+    const o = DB.setOrderStatus(m[1].toUpperCase(), status);
+    return o ? ok(res, { ref: o.ref, status: o.status }) : bad(res, 'Order not found', 404);
+  } catch (e) { return bad(res, e.message); }
+}, { auth: true });
+
+route('GET', /^\/api\/admin\/messages$/, async (req, res) =>
+  ok(res, { messages: DB.listMessages() }), { auth: true });
+
+route('PATCH', /^\/api\/admin\/messages\/([\w-]+)$/, async (req, res, m) => {
+  const { handled } = await readBody(req);
+  ok(res, DB.setMessageHandled(m[1], handled));
+}, { auth: true });
+
+route('GET', /^\/api\/admin\/subscribers$/, async (req, res) =>
+  ok(res, { subscribers: DB.listSubscribers() }), { auth: true });
+
+/* ====================================================== static host == */
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.mp4': 'video/mp4',
+  '.json': 'application/json', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
+};
+
+async function serveStatic(req, res, pathname) {
+  let rel = decodeURIComponent(pathname);
+  if (rel.endsWith('/')) rel += 'index.html';
+  if (!extname(rel)) rel += '.html';
+
+  // Contain everything under ROOT — no path traversal.
+  const target = resolve(ROOT, '.' + normalize(rel));
+  if (target !== ROOT && !target.startsWith(ROOT + sep)) {
+    res.writeHead(403).end('Forbidden');
+    return;
+  }
+
+  try {
+    const s = await stat(target);
+    if (!s.isFile()) throw new Error('not a file');
+    const buf = await readFile(target);
+    const type = MIME[extname(target).toLowerCase()] || 'application/octet-stream';
+    const cache = /\/assets\/(img|video)\//.test(rel)
+      ? 'public, max-age=86400'
+      : 'no-cache';
+    res.writeHead(200, { 'content-type': type, 'content-length': buf.length, 'cache-control': cache });
+    res.end(buf);
+  } catch {
+    res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+    res.end('<h1>404</h1><p><a href="/">Back to the storefront</a></p>');
+  }
+}
+
+/* ============================================================ server == */
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const { pathname } = url;
+
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'same-origin');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+      'access-control-allow-headers': 'content-type,authorization',
+    });
+    return res.end();
+  }
+  if (pathname.startsWith('/api/')) res.setHeader('access-control-allow-origin', '*');
+
+  for (const r of routes) {
+    if (r.method !== req.method) continue;
+    const m = r.pattern.exec(pathname);
+    if (!m) continue;
+
+    let user = null;
+    if (r.auth) {
+      user = requireAuth(req);
+      if (!user) return bad(res, 'Sign in required', 401);
+    }
+    try {
+      return await r.handler(req, res, m, url, user);
+    } catch (e) {
+      console.error(`[api] ${req.method} ${pathname}:`, e.message);
+      return bad(res, e.message || 'Server error', 500);
+    }
+  }
+
+  if (pathname.startsWith('/api/')) return bad(res, 'No such endpoint', 404);
+  return serveStatic(req, res, pathname);
+});
+
+/* ============================================================== boot == */
+const seeded = DB.seedIfEmpty();
+
+/* Hosts with an ephemeral filesystem lose the database on every restart.
+   SEED_DEMO=1 refills it on boot so the dashboard is never empty. */
+let demoSeeded = null;
+if (process.env.SEED_DEMO === '1') {
+  try {
+    const { seedDemo } = await import('../tools/seed-demo.mjs');
+    demoSeeded = seedDemo({ silent: true });
+  } catch (e) {
+    console.error('[seed] demo data failed:', e.message);
+  }
+}
+
+server.listen(PORT, () => {
+  const line = '─'.repeat(56);
+  console.log(`\n${line}`);
+  console.log('  AURELLE — server running');
+  console.log(line);
+  console.log(`  Storefront   http://localhost:${PORT}/`);
+  console.log(`  Dashboard    http://localhost:${PORT}/admin/`);
+  console.log(`  API health   http://localhost:${PORT}/api/health`);
+  console.log(`\n  Database     ${DB.DB_PATH}`);
+  if (seeded.products) console.log(`  Seeded       ${seeded.products} products`);
+  if (demoSeeded && demoSeeded.orders) console.log(`  Demo data    ${demoSeeded.orders} orders`);
+  if (seeded.admin) {
+    console.log(`\n  Dashboard login`);
+    console.log(`    email     ${seeded.admin.email}`);
+    console.log(`    password  ${seeded.admin.pass}`);
+    console.log(`\n  Change this before deploying anywhere public:`);
+    console.log(`    ADMIN_EMAIL=you@company.com ADMIN_PASSWORD=... node server/server.js`);
+  }
+  console.log(`${line}\n`);
+});
+
+process.on('SIGINT', () => { console.log('\nShutting down.'); server.close(() => process.exit(0)); });

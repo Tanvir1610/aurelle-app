@@ -1,0 +1,706 @@
+/* ============================================================
+   AURELLE — PAGE CONTROLLERS
+   Each page sets <body data-page="..."> and this file paints it.
+   Data comes from AU_DATA today; point these at fetch() calls
+   when the API is live and nothing else has to change.
+   ============================================================ */
+(function () {
+  const { $, $$, inr, pctOff, esc, param, mq, icon, stars, productCard, grid, toast } = window.AU;
+  const D = window.AU_DATA;
+  const M = window.AU_MEDIA;
+  const C = window.AU_CART;
+
+  /* ================================================== HOME ====== */
+  function home() {
+    /* hero carousel */
+    const slides = $('#heroSlides');
+    if (slides) {
+      slides.innerHTML = D.hero.map((s, i) => `
+        <div class="hero__slide${i === 0 ? ' is-active' : ''}">
+          <div class="hero__media">${M.heroMedia(s)}</div>
+          <div class="hero__scrim"></div>
+          <div class="hero__body"><div class="container">
+            <div class="hero__copy">
+              <p class="eyebrow">${esc(s.eyebrow)}</p>
+              <h1>${esc(s.title)}</h1>
+              <p>${esc(s.body)}</p>
+              <div class="hero__cta">
+                <a class="btn btn--gold" href="${s.cta.href}">${esc(s.cta.label)}</a>
+                <a class="btn btn--light" href="${s.cta2.href}">${esc(s.cta2.label)}</a>
+              </div>
+            </div>
+          </div></div>
+        </div>`).join('');
+
+      const dots = $('#heroDots');
+      dots.innerHTML = D.hero.map((s, i) =>
+        `<button class="hero__dot${i === 0 ? ' is-active' : ''}" type="button" data-slide="${i}" aria-label="Slide ${i + 1}: ${esc(s.eyebrow)}"></button>`).join('');
+
+      let idx = 0, timer;
+      const go = (n) => {
+        idx = (n + D.hero.length) % D.hero.length;
+        $$('.hero__slide').forEach((el, i) => el.classList.toggle('is-active', i === idx));
+        $$('.hero__dot').forEach((el, i) => el.classList.toggle('is-active', i === idx));
+      };
+      const start = () => { timer = setInterval(() => go(idx + 1), 6500); };
+      const stop = () => clearInterval(timer);
+      dots.addEventListener('click', e => {
+        const b = e.target.closest('[data-slide]');
+        if (b) { stop(); go(Number(b.dataset.slide)); start(); }
+      });
+      $('.hero').addEventListener('mouseenter', stop);
+      $('.hero').addEventListener('mouseleave', start);
+      if (!mq('(prefers-reduced-motion: reduce)')) start();
+    }
+
+    /* USP strip */
+    const usp = $('#uspStrip');
+    if (usp) usp.innerHTML = D.usps.map(u => `
+      <div class="usp__item">${icon(u.icon, 26)}
+        <div><strong>${esc(u.title)}</strong><span>${esc(u.sub)}</span></div>
+      </div>`).join('');
+
+    /* categories */
+    const cats = $('#catGrid');
+    if (cats) cats.innerHTML = D.categories.map(c => `
+      <a class="cat-tile" href="collection.html?cat=${encodeURIComponent(c.label)}">
+        <div class="cat-tile__img">${M.img(c.img, c.label)}</div>
+        <h3>${esc(c.label)}</h3><span>${c.count} pieces</span>
+      </a>`).join('');
+
+    /* rails */
+    const byNew = D.products.filter(p => p.badge === 'New').concat(D.products.slice(12)).slice(0, 4);
+    const best  = D.products.filter(p => p.badge === 'Bestseller').slice(0, 4);
+    const rose  = D.products.filter(p => p.metal === 'Rose Gold').slice(0, 4);
+    $('#railNew')  && ($('#railNew').innerHTML  = byNew.map(productCard).join(''));
+    $('#railBest') && ($('#railBest').innerHTML = best.map(productCard).join(''));
+    $('#railRose') && ($('#railRose').innerHTML = rose.map(productCard).join(''));
+
+    /* collections + budget tiles */
+    const col = $('#collectionTiles');
+    if (col) col.innerHTML = D.collections.map(c => `
+      <a class="tile" href="${c.href}">
+        ${M.img(c.img, c.label)}<div class="tile__scrim"></div>
+        <div class="tile__body"><span>${esc(c.sub)}</span><h3>${esc(c.label)}</h3></div>
+      </a>`).join('');
+
+    const bud = $('#budgetTiles');
+    if (bud) bud.innerHTML = D.budget.map(b => `
+      <a class="budget-tile" href="${b.href}">
+        ${M.img(b.img, b.label)}
+        <span class="budget-tile__label"><span>${esc(b.sub)}</span><strong>${esc(b.label)}</strong></span>
+      </a>`).join('');
+
+    /* reviews */
+    const rev = $('#reviewGrid');
+    if (rev) rev.innerHTML = D.reviews.slice(0, 3).map(r => `
+      <blockquote class="review">
+        ${stars(r.stars)}
+        <p class="review__quote">${esc(r.quote)}</p>
+        <footer class="review__who">
+          ${M.img(r.avatar, r.name, { width: 40 })}
+          <span><strong>${esc(r.name)}</strong><span>${esc(r.place)} · ${esc(r.product)}</span></span>
+        </footer>
+      </blockquote>`).join('');
+
+    /* store preview */
+    const st = $('#storePreview');
+    if (st) st.innerHTML = D.stores.slice(0, 3).map(s => `
+      <article class="store">
+        <h3>${esc(s.name)}</h3>
+        <p>${esc(s.addr)}</p>
+        <dl><dt>Hours</dt><dd>${esc(s.hours)}</dd><dt>Call</dt><dd>${esc(s.phone)}</dd></dl>
+      </article>`).join('');
+
+    window.AU.reveal();
+  }
+
+  /* ============================================ COLLECTION (PLP) === */
+  const PAGE_SIZE = 9;
+
+  function collection() {
+    const state = {
+      cats: param('cat') ? [param('cat')] : [],
+      metals: param('metal') ? [param('metal')] : [],
+      occasions: param('occasion') ? [param('occasion')] : [],
+      max: param('max') ? Number(param('max')) : null,
+      sale: param('sale') === '1',
+      q: param('q') || '',
+      sort: param('sort') || 'featured',
+      page: 1,
+    };
+
+    const allMetals = [...new Set(D.products.map(p => p.metal))];
+    const allOcc = [...new Set(D.products.flatMap(p => p.occasion))];
+    const bands = [
+      { label: 'Under ₹999', max: 999 },
+      { label: 'Under ₹1,499', max: 1499 },
+      { label: 'Under ₹2,999', max: 2999 },
+      { label: 'Under ₹4,999', max: 4999 },
+    ];
+
+    function match(p) {
+      if (state.cats.length && !state.cats.includes(p.cat)) return false;
+      if (state.metals.length && !state.metals.includes(p.metal)) return false;
+      if (state.occasions.length && !p.occasion.some(o => state.occasions.includes(o))) return false;
+      if (state.max && p.price > state.max) return false;
+      if (state.sale && !(p.mrp > p.price)) return false;
+      if (state.q) {
+        const hay = (p.name + ' ' + p.cat + ' ' + p.metal + ' ' + p.blurb).toLowerCase();
+        if (!hay.includes(state.q.toLowerCase())) return false;
+      }
+      return true;
+    }
+
+    function sorted(list) {
+      const l = list.slice();
+      if (state.sort === 'low')     l.sort((a, b) => a.price - b.price);
+      else if (state.sort === 'high') l.sort((a, b) => b.price - a.price);
+      else if (state.sort === 'new')  l.sort((a, b) => (b.badge === 'New') - (a.badge === 'New'));
+      else if (state.sort === 'popular') l.sort((a, b) => b.reviews - a.reviews);
+      else if (state.sort === 'rating')  l.sort((a, b) => b.rating - a.rating);
+      return l;
+    }
+
+    function facetCount(fn) { return D.products.filter(fn).length; }
+
+    function renderFilters() {
+      const box = $('#filters');
+      const cb = (group, value, checked, count) => `
+        <label class="filter-opt">
+          <input type="checkbox" data-group="${group}" value="${esc(value)}"${checked ? ' checked' : ''}>
+          <span>${esc(value)}</span><em>${count}</em>
+        </label>`;
+
+      box.innerHTML = `
+        <div class="filter-group">
+          <h4>Category</h4>
+          ${D.categories.map(c => cb('cats', c.label, state.cats.includes(c.label), facetCount(p => p.cat === c.label))).join('')}
+        </div>
+        <div class="filter-group">
+          <h4>Price</h4>
+          ${bands.map(b => `
+            <label class="filter-opt">
+              <input type="radio" name="price" data-group="max" value="${b.max}"${state.max === b.max ? ' checked' : ''}>
+              <span>${b.label}</span><em>${facetCount(p => p.price <= b.max)}</em>
+            </label>`).join('')}
+          <label class="filter-opt">
+            <input type="radio" name="price" data-group="max" value=""${!state.max ? ' checked' : ''}>
+            <span>Any price</span><em>${D.products.length}</em>
+          </label>
+        </div>
+        <div class="filter-group">
+          <h4>Metal</h4>
+          ${allMetals.map(m => cb('metals', m, state.metals.includes(m), facetCount(p => p.metal === m))).join('')}
+        </div>
+        <div class="filter-group">
+          <h4>Occasion</h4>
+          ${allOcc.map(o => cb('occasions', o, state.occasions.includes(o), facetCount(p => p.occasion.includes(o)))).join('')}
+        </div>`;
+    }
+
+    function renderChips() {
+      const chips = [];
+      state.cats.forEach(v => chips.push(['cats', v]));
+      state.metals.forEach(v => chips.push(['metals', v]));
+      state.occasions.forEach(v => chips.push(['occasions', v]));
+      if (state.max) chips.push(['max', `Under ${inr(state.max)}`]);
+      if (state.sale) chips.push(['sale', 'On sale']);
+      if (state.q) chips.push(['q', `“${state.q}”`]);
+
+      const host = $('#activeChips');
+      host.innerHTML = chips.length
+        ? chips.map(([g, v]) => `<button class="chip" type="button" data-clear="${g}" data-val="${esc(v)}">${esc(v)} ${icon('x', 12)}</button>`).join('')
+          + `<button class="chip" type="button" data-clear="all">Clear all</button>`
+        : '';
+    }
+
+    function render() {
+      const filtered = sorted(D.products.filter(match));
+      const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      state.page = Math.min(state.page, pages);
+      const slice = filtered.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
+
+      $('#plpCount').textContent = filtered.length === 1 ? '1 piece' : `${filtered.length} pieces`;
+      renderChips();
+
+      $('#plpGrid').innerHTML = slice.length
+        ? `<div class="product-grid product-grid--3">${slice.map(productCard).join('')}</div>`
+        : `<div class="empty">
+             <h3>Nothing matches those filters</h3>
+             <p>Try widening the price band, or clear the filters and start again.</p>
+             <button class="btn btn--ghost" type="button" data-clear="all">Clear all filters</button>
+           </div>`;
+
+      $('#plpPager').innerHTML = pages > 1 ? `
+        <button type="button" data-page="${state.page - 1}"${state.page === 1 ? ' disabled' : ''}>Prev</button>
+        ${Array.from({ length: pages }, (_, i) =>
+          `<button type="button" data-page="${i + 1}" class="${state.page === i + 1 ? 'is-active' : ''}">${i + 1}</button>`).join('')}
+        <button type="button" data-page="${state.page + 1}"${state.page === pages ? ' disabled' : ''}>Next</button>` : '';
+    }
+
+    /* title reflects the entry point */
+    const title = state.cats[0] || (state.sale ? 'The Aurelle sale'
+                  : state.occasions[0] ? `${state.occasions[0]} edit`
+                  : state.metals[0] ? `${state.metals[0]} pieces`
+                  : state.max ? `Under ${inr(state.max)}` : 'All jewellery');
+    $('#plpTitle').textContent = title;
+    $('#plpCrumb').textContent = title;
+
+    renderFilters();
+    render();
+
+    $('#plpSort').value = state.sort;
+    $('#plpSort').addEventListener('change', e => { state.sort = e.target.value; state.page = 1; render(); });
+
+    $('#plpSearch')?.addEventListener('input', e => { state.q = e.target.value; state.page = 1; render(); });
+
+    $('#filters').addEventListener('change', e => {
+      const el = e.target;
+      const g = el.dataset.group;
+      if (!g) return;
+      if (g === 'max') state.max = el.value ? Number(el.value) : null;
+      else {
+        const set = new Set(state[g]);
+        el.checked ? set.add(el.value) : set.delete(el.value);
+        state[g] = [...set];
+      }
+      state.page = 1;
+      render();
+    });
+
+    document.addEventListener('click', e => {
+      const clear = e.target.closest('[data-clear]');
+      if (clear) {
+        const g = clear.dataset.clear;
+        if (g === 'all') { state.cats = []; state.metals = []; state.occasions = []; state.max = null; state.sale = false; state.q = ''; if ($('#plpSearch')) $('#plpSearch').value = ''; }
+        else if (g === 'max') state.max = null;
+        else if (g === 'sale') state.sale = false;
+        else if (g === 'q') { state.q = ''; if ($('#plpSearch')) $('#plpSearch').value = ''; }
+        else state[g] = state[g].filter(v => v !== clear.dataset.val);
+        state.page = 1;
+        renderFilters(); render();
+        return;
+      }
+      const pg = e.target.closest('[data-page]');
+      if (pg && !pg.disabled) {
+        state.page = Number(pg.dataset.page);
+        render();
+        window.scrollTo({ top: $('#plpTop').offsetTop - 100, behavior: 'smooth' });
+      }
+    });
+  }
+
+  /* =================================================== PRODUCT === */
+  function product() {
+    const slug = param('p') || D.products[0].slug;
+    const p = D.products.find(x => x.slug === slug) || D.products[0];
+    document.title = `${p.name} — Aurelle`;
+
+    const imgs = [p.img, p.imgAlt, p.img, p.imgAlt];
+    let finish = p.swatches[0].label;
+    let qty = 1;
+
+    $('#pdpCrumbCat').textContent = p.cat;
+    $('#pdpCrumbCat').href = `collection.html?cat=${encodeURIComponent(p.cat)}`;
+    $('#pdpCrumbName').textContent = p.name;
+
+    $('#pdpGallery').innerHTML = `
+      <div class="gallery__thumbs">
+        ${imgs.map((src, i) => `<button class="gallery__thumb${i === 0 ? ' is-active' : ''}" type="button" data-img="${i}">
+          ${M.img(src, `${p.name} view ${i + 1}`)}</button>`).join('')}
+      </div>
+      <div class="gallery__main" id="galleryMain">${M.img(imgs[0], p.name, { eager: true })}</div>`;
+
+    $('#pdpGallery').addEventListener('click', e => {
+      const b = e.target.closest('[data-img]');
+      if (!b) return;
+      $$('.gallery__thumb').forEach(t => t.classList.remove('is-active'));
+      b.classList.add('is-active');
+      $('#galleryMain').innerHTML = M.img(imgs[Number(b.dataset.img)], p.name, { eager: true });
+    });
+
+    const off = pctOff(p.price, p.mrp);
+    $('#pdpInfo').innerHTML = `
+      <p class="eyebrow">${esc(p.cat)}</p>
+      <h1>${esc(p.name)}</h1>
+      <div class="pdp__meta">
+        <span class="rating">${stars(p.rating)} ${p.rating.toFixed(1)} · ${p.reviews} reviews</span>
+        <span class="muted" style="font-size:var(--fs-xs)">SKU AUR-${p.slug.slice(0, 4).toUpperCase()}-${p.price}</span>
+      </div>
+      <p class="muted" style="margin-top:var(--space-4);line-height:var(--lh-relaxed)">${esc(p.blurb)}</p>
+      <div class="pdp__price">
+        <div class="price">
+          <span class="price__now">${inr(p.price)}</span>
+          <span class="price__was">${inr(p.mrp)}</span>
+          <span class="price__off">${off}% off</span>
+        </div>
+        <p class="pdp__tax">Inclusive of all taxes · Free shipping over ${inr(C.FREE_SHIP_AT)}</p>
+      </div>
+
+      <div class="pdp__field">
+        <label>Finish — <span id="finishLabel">${esc(finish)}</span></label>
+        <div class="pdp__swatches" id="pdpSwatches">
+          ${p.swatches.map((s, i) => `<button class="swatch" type="button" style="background:${s.color}"
+             data-finish="${esc(s.label)}" aria-pressed="${i === 0}" aria-label="${esc(s.label)}"></button>`).join('')}
+        </div>
+      </div>
+
+      <div class="pdp__field">
+        <label>Quantity</label>
+        <div class="stepper">
+          <button type="button" id="qtyDown" aria-label="Decrease quantity">−</button>
+          <span id="qtyVal">1</span>
+          <button type="button" id="qtyUp" aria-label="Increase quantity">+</button>
+        </div>
+      </div>
+
+      <div class="pdp__buy">
+        <button class="btn btn--primary" type="button" id="pdpAdd">Add to bag</button>
+        <button class="btn btn--gold" type="button" id="pdpBuy">Buy it now</button>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion__item is-open">
+          <button class="accordion__head" type="button"><span>Details</span><span>+</span></button>
+          <div class="accordion__panel">
+            <table class="spec-table">
+              <tr><td>Base metal</td><td>Brass, nickel &amp; lead free</td></tr>
+              <tr><td>Plating</td><td>24Kt gold-plated, anti-tarnish sealed</td></tr>
+              <tr><td>Finish</td><td>${esc(p.metal)}</td></tr>
+              <tr><td>Category</td><td>${esc(p.cat)}</td></tr>
+              <tr><td>Warranty</td><td>6 months on plating &amp; setting</td></tr>
+              <tr><td>Ships in</td><td>2–4 working days (metros)</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__head" type="button"><span>Care</span><span>+</span></button>
+          <div class="accordion__panel">
+            Put it on last when you dress, take it off first when you get home. Keep it away from perfume, chlorine and cleaning products, and store it in the pouch it arrived in so nothing scratches against it.
+            <ul><li>Wipe with a dry, soft cloth after wear</li><li>Never soak or submerge</li><li>Remove before swimming, showering or the gym</li></ul>
+          </div>
+        </div>
+        <div class="accordion__item">
+          <button class="accordion__head" type="button"><span>Shipping &amp; returns</span><span>+</span></button>
+          <div class="accordion__panel">
+            Free shipping over ${inr(C.FREE_SHIP_AT)}, flat ₹79 below that. Metro delivery in 2–4 working days, elsewhere 4–7. Returns and exchanges accepted within 7 days of delivery, unworn and in the box, with free pickup in serviceable pincodes.
+          </div>
+        </div>
+      </div>`;
+
+    /* interactions */
+    $('#pdpSwatches').addEventListener('click', e => {
+      const b = e.target.closest('[data-finish]');
+      if (!b) return;
+      $$('#pdpSwatches .swatch').forEach(s => s.setAttribute('aria-pressed', 'false'));
+      b.setAttribute('aria-pressed', 'true');
+      finish = b.dataset.finish;
+      $('#finishLabel').textContent = finish;
+    });
+
+    $('#qtyUp').addEventListener('click', () => { qty++; $('#qtyVal').textContent = qty; });
+    $('#qtyDown').addEventListener('click', () => { qty = Math.max(1, qty - 1); $('#qtyVal').textContent = qty; });
+
+    $('#pdpAdd').addEventListener('click', () => {
+      C.add(p.slug, qty, finish);
+      toast(`${p.name} added to your bag`);
+      window.AU.openCart();
+    });
+    $('#pdpBuy').addEventListener('click', () => {
+      C.add(p.slug, qty, finish);
+      location.href = 'checkout.html';
+    });
+
+    $('#pdpInfo').addEventListener('click', e => {
+      const head = e.target.closest('.accordion__head');
+      if (head) head.parentElement.classList.toggle('is-open');
+    });
+
+    /* complete the look */
+    const also = D.products.filter(x => x.slug !== p.slug && (x.cat === p.cat || x.metal === p.metal)).slice(0, 4);
+    $('#pdpAlso').innerHTML = also.map(productCard).join('');
+
+    /* product reviews */
+    $('#pdpReviews').innerHTML = D.reviews.slice(0, 3).map(r => `
+      <blockquote class="review">
+        ${stars(r.stars)}
+        <p class="review__quote">${esc(r.quote)}</p>
+        <footer class="review__who">${M.img(r.avatar, r.name, { width: 40 })}
+          <span><strong>${esc(r.name)}</strong><span>Verified buyer · ${esc(r.place)}</span></span></footer>
+      </blockquote>`).join('');
+  }
+
+  /* ====================================================== CART === */
+  function cartPage() {
+    function paint(snap) {
+      const body = $('#cartLines'), sum = $('#cartSummary');
+      if (!snap.lines.length) {
+        $('#cartWrap').innerHTML = `<div class="empty">
+          <h3>Your bag is empty</h3>
+          <p>Nothing here yet. Start with the pieces people buy most.</p>
+          <a class="btn btn--primary" href="collection.html?sort=popular">Shop bestsellers</a>
+        </div>`;
+        return;
+      }
+      body.innerHTML = snap.lines.map(l => `
+        <div class="line">
+          ${M.img(l.product.img, l.product.name, { width: 76 })}
+          <div>
+            <a href="product.html?p=${encodeURIComponent(l.slug)}"><span class="line__name">${esc(l.product.name)}</span></a>
+            <div class="line__variant">${esc(l.finish)} · ${esc(l.product.cat)}</div>
+            <div class="stepper">
+              <button type="button" data-qty="${esc(l.id)}" data-delta="-1" aria-label="Decrease quantity">−</button>
+              <span>${l.qty}</span>
+              <button type="button" data-qty="${esc(l.id)}" data-delta="1" aria-label="Increase quantity">+</button>
+            </div>
+          </div>
+          <div><div class="line__price">${inr(l.lineTotal)}</div>
+            <button class="line__remove" type="button" data-remove="${esc(l.id)}">Remove</button></div>
+        </div>`).join('');
+
+      const t = snap.totals;
+      sum.innerHTML = `
+        <h3>Order summary</h3>
+        <div class="totals">
+          <div><span>Subtotal (${t.count} ${t.count === 1 ? 'item' : 'items'})</span><span>${inr(t.subtotal)}</span></div>
+          ${t.saved > 0 ? `<div><span>You save</span><span style="color:var(--success)">− ${inr(t.saved)}</span></div>` : ''}
+          <div><span>Shipping</span><span>${t.shipping === 0 ? 'Free' : inr(t.shipping)}</span></div>
+          <div class="is-total"><span>Total</span><span>${inr(t.total)}</span></div>
+        </div>
+        <a class="btn btn--gold btn--block" href="checkout.html">Proceed to checkout</a>
+        <a class="btn btn--ghost btn--block" href="collection.html" style="margin-top:var(--space-3)">Continue shopping</a>`;
+    }
+    document.addEventListener('au:cart', e => paint(e.detail));
+    paint(C.snapshot());
+  }
+
+  /* ================================================== CHECKOUT === */
+  function checkout() {
+    function paintSummary(snap) {
+      const t = snap.totals;
+      $('#coSummary').innerHTML = `
+        <h3>Your order</h3>
+        ${snap.lines.map(l => `
+          <div class="line">
+            ${M.img(l.product.img, l.product.name, { width: 76 })}
+            <div><span class="line__name">${esc(l.product.name)}</span>
+              <div class="line__variant">${esc(l.finish)} · Qty ${l.qty}</div></div>
+            <div class="line__price">${inr(l.lineTotal)}</div>
+          </div>`).join('')}
+        <div class="totals" style="margin-top:var(--space-5)">
+          <div><span>Subtotal</span><span>${inr(t.subtotal)}</span></div>
+          <div><span>Shipping</span><span>${t.shipping === 0 ? 'Free' : inr(t.shipping)}</span></div>
+          <div class="is-total"><span>Total</span><span>${inr(t.total)}</span></div>
+        </div>`;
+    }
+    document.addEventListener('au:cart', e => paintSummary(e.detail));
+    paintSummary(C.snapshot());
+
+    $('#coForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      let ok = true;
+      $$('#coForm [required]').forEach(input => {
+        const field = input.closest('.field');
+        const bad = !input.value.trim() ||
+          (input.type === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.value)) ||
+          (input.name === 'phone' && !/^[6-9]\d{9}$/.test(input.value.replace(/\D/g, ''))) ||
+          (input.name === 'pincode' && !/^\d{6}$/.test(input.value.trim()));
+        field.classList.toggle('field--error', bad);
+        if (bad) ok = false;
+      });
+      if (!ok) { toast('Check the highlighted fields'); return; }
+      const snap = C.snapshot();
+      if (!snap.lines.length) { toast('Your bag is empty'); return; }
+
+      const btn = $('#coForm button[type=submit]');
+      btn.disabled = true;
+      btn.textContent = 'Placing order…';
+
+      const details = {
+        firstName: $('#fn').value.trim(), lastName: $('#ln').value.trim(),
+        email: $('#em').value.trim(), phone: $('#ph').value.replace(/\D/g, ''),
+        address: $('#ad').value.trim(), city: $('#ct').value.trim(),
+        pincode: $('#pc').value.trim(), payment: $('#pm').value,
+      };
+
+      try {
+        const order = await window.AU_API.createOrder(details, snap.lines);
+        try { sessionStorage.setItem('aurelle.lastOrder', order.ref); } catch (err) {}
+        C.clear();
+        location.href = `confirmation.html?ref=${order.ref}`;
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Place order';
+        toast(err.message || 'Could not place the order. Try again.');
+      }
+    });
+  }
+
+  /* ============================================== CONFIRMATION === */
+  function confirmation() {
+    const ref = param('ref') || 'AUR000000';
+    $('#confRef').textContent = ref;
+    $('#confPicks').innerHTML = D.products.filter(p => p.badge === 'Bestseller').slice(0, 4).map(productCard).join('');
+  }
+
+  /* ================================================== WISHLIST === */
+  function wishlist() {
+    function paint(snap) {
+      const list = D.products.filter(p => snap.wishlist.includes(p.slug));
+      $('#wishGrid').innerHTML = list.length
+        ? `<div class="product-grid">${list.map(productCard).join('')}</div>`
+        : `<div class="empty"><h3>Nothing saved yet</h3>
+             <p>Tap the heart on any piece and it will wait for you here.</p>
+             <a class="btn btn--primary" href="collection.html">Browse jewellery</a></div>`;
+    }
+    document.addEventListener('au:cart', e => paint(e.detail));
+    paint(C.snapshot());
+  }
+
+  /* ====================================================== FAQ ==== */
+  function faq() {
+    $('#faqList').innerHTML = D.faqs.map((f, i) => `
+      <div class="accordion__item${i === 0 ? ' is-open' : ''}">
+        <button class="accordion__head" type="button"><span>${esc(f.q)}</span><span>+</span></button>
+        <div class="accordion__panel">${esc(f.a)}</div>
+      </div>`).join('');
+    $('#faqList').addEventListener('click', e => {
+      const h = e.target.closest('.accordion__head');
+      if (h) h.parentElement.classList.toggle('is-open');
+    });
+  }
+
+  /* =================================================== STORES ==== */
+  function stores() {
+    const render = (list) => {
+      $('#storeGrid').innerHTML = list.length ? list.map(s => `
+        <article class="store">
+          <p class="eyebrow">${esc(s.city)}</p>
+          <h3>${esc(s.name)}</h3>
+          <p>${esc(s.addr)}</p>
+          <dl><dt>Hours</dt><dd>${esc(s.hours)}</dd><dt>Call</dt><dd>${esc(s.phone)}</dd></dl>
+          <a class="btn btn--ghost btn--sm" style="margin-top:var(--space-5)" href="contact.html">Book an appointment</a>
+        </article>`).join('')
+        : `<div class="empty"><h3>No stores in that city yet</h3><p>We ship everywhere in India, and new stores open every quarter.</p></div>`;
+    };
+    render(D.stores);
+    $('#storeSearch').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      render(D.stores.filter(s => (s.city + s.name + s.addr).toLowerCase().includes(q)));
+    });
+  }
+
+  /* ================================================== JOURNAL ==== */
+  function journal() {
+    $('#journalGrid').innerHTML = D.journal.map(j => `
+      <a class="tile tile--wide" href="#">
+        ${M.img(j.img, j.title)}<div class="tile__scrim"></div>
+        <div class="tile__body"><span>${esc(j.kicker)} · ${esc(j.read)}</span><h3>${esc(j.title)}</h3></div>
+      </a>`).join('');
+    $('#journalList').innerHTML = D.journal.map(j => `
+      <article style="padding-block:var(--space-6);border-bottom:1px solid var(--border)">
+        <p class="eyebrow">${esc(j.kicker)} · ${esc(j.read)} read</p>
+        <h3 style="font-size:var(--fs-h3)">${esc(j.title)}</h3>
+        <p class="muted" style="margin-top:var(--space-3)">${esc(j.excerpt)}</p>
+      </article>`).join('');
+  }
+
+  /* =============================================== TRACK ORDER === */
+  function track() {
+    $('#trackForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const ref = $('#trackRef').value.trim().toUpperCase();
+      if (!/^AUR\d{6}$/.test(ref)) { toast('Order IDs look like AUR123456'); return; }
+
+      const out = $('#trackResult');
+      out.innerHTML = '<p class="muted center">Looking that up…</p>';
+
+      const LABELS = { placed: 'Order placed', packed: 'Packed at our warehouse',
+                       shipped: 'In transit', delivered: 'Delivered' };
+      try {
+        const o = await window.AU_API.trackOrder(ref);
+        if (!o) {
+          out.innerHTML = `<div class="panel"><h3>Tracking needs the server</h3>
+            <p class="muted">Start the backend and this pulls the real status.</p></div>`;
+          return;
+        }
+        out.innerHTML = `
+          <div class="panel">
+            <p class="eyebrow">Order ${esc(o.ref)}</p>
+            <h3>${esc(o.status === 'cancelled' ? 'Order cancelled' : LABELS[o.status] || o.status)}</h3>
+            <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-2)">
+              ${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join(', ')} · ${inr(o.total)} · to ${esc(o.city)}
+            </p>
+            <div style="margin-top:var(--space-6)">
+              ${o.timeline.map(t => `
+                <div style="display:flex;gap:var(--space-4);align-items:flex-start;padding-bottom:var(--space-5)">
+                  <span style="width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;
+                    background:${t.done ? 'var(--gold-500)' : 'var(--ivory-200)'};color:#fff">
+                    ${t.done ? window.AU.icon('check', 13) : ''}</span>
+                  <div><strong style="font-family:var(--font-sans);font-size:var(--fs-sm)">${esc(LABELS[t.step] || t.step)}</strong>
+                    <div class="muted" style="font-size:var(--fs-xs)">${t.done ? 'Done' : 'Pending'}</div></div>
+                </div>`).join('')}
+            </div>
+          </div>`;
+      } catch (err) {
+        out.innerHTML = `<div class="panel"><h3>We could not find that order</h3>
+          <p class="muted">${esc(err.message)}</p></div>`;
+      }
+    });
+  }
+
+  /* ================================================== CONTACT ==== */
+  function contact() {
+    $('#contactForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      let ok = true;
+      $$('#contactForm [required]').forEach(i => {
+        const bad = !i.value.trim() || (i.type === 'email' && !i.value.includes('@'));
+        i.closest('.field').classList.toggle('field--error', bad);
+        if (bad) ok = false;
+      });
+      if (!ok) { toast('Check the highlighted fields'); return; }
+      try {
+        await window.AU_API.contact({
+          name: $('#cn').value.trim(), email: $('#ce').value.trim(),
+          orderRef: $('#co').value.trim() || null, subject: $('#cs').value,
+          body: $('#cm').value.trim(),
+        });
+        e.target.reset();
+        toast('Message sent. We reply within two working days.');
+      } catch (err) { toast(err.message || 'Could not send that. Try again.'); }
+    });
+  }
+
+  /* ================================================== ACCOUNT ==== */
+  function account() {
+    $('#authForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const email = $('#authEmail').value;
+      if (!email.includes('@')) { toast('Enter a valid email address'); return; }
+      /* Backend hook: POST /api/auth/login */
+      toast('Sign-in needs the backend. Coming in phase two.');
+    });
+  }
+
+  /* ==================================================== BOOT ===== */
+  const ROUTES = { home, collection, product, cart: cartPage, checkout, confirmation,
+                   wishlist, faq, stores, journal, track, contact, account };
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const page = document.body.dataset.page;
+
+    // Pull the live catalogue if a backend is reachable; otherwise
+    // carry on with the bundled data.
+    if (window.AU_API) {
+      try { await window.AU_API.init(); } catch (err) { /* static mode */ }
+    }
+
+    window.AU.mount(document.body.dataset.nav || '');
+    if (ROUTES[page]) {
+      try { ROUTES[page](); } catch (err) { console.error(`[aurelle] ${page} failed:`, err); }
+    }
+    window.AU.reveal();
+  });
+})();
