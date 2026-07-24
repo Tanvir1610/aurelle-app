@@ -47,7 +47,7 @@ export const listSubscribers  = impl.listSubscribers;
 export const stats            = impl.stats;
 export const seedIfEmpty      = impl.seedIfEmpty;
 
-/* Customer accounts — Supabase only (SQLite build predates Clerk). */
+/* Customer accounts — implemented by both drivers. */
 export const upsertCustomer    = impl.upsertCustomer    || notSupported('Customer accounts');
 export const getCustomerOrders = impl.getCustomerOrders || notSupported('Order history');
 

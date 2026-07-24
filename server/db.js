@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS orders (
   id           TEXT PRIMARY KEY,
   ref          TEXT UNIQUE NOT NULL,
+  clerk_user_id TEXT,
   first_name   TEXT NOT NULL,
   last_name    TEXT NOT NULL,
   email        TEXT NOT NULL,
@@ -90,6 +91,17 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS customers (
+  id            TEXT PRIMARY KEY,
+  clerk_user_id TEXT UNIQUE NOT NULL,
+  email         TEXT NOT NULL,
+  first_name    TEXT,
+  last_name     TEXT,
+  phone         TEXT,
+  created_at    TEXT DEFAULT (datetime('now')),
+  last_seen_at  TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS admins (
   id         TEXT PRIMARY KEY,
   email      TEXT UNIQUE NOT NULL,
@@ -100,9 +112,18 @@ CREATE TABLE IF NOT EXISTS admins (
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_clerk   ON orders(clerk_user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_items_order    ON order_items(order_id);
 `);
+
+/* Older databases predate clerk_user_id — add it in place. */
+try {
+  const cols = db.prepare('PRAGMA table_info(orders)').all().map(c => c.name);
+  if (!cols.includes('clerk_user_id')) {
+    db.exec('ALTER TABLE orders ADD COLUMN clerk_user_id TEXT');
+  }
+} catch (e) { /* fresh database, nothing to migrate */ }
 
 /* -------------------------------------------------------- passwords -- */
 export function hashPassword(plain, salt = randomBytes(16).toString('hex')) {
@@ -301,9 +322,10 @@ export function createOrder(payload) {
   db.exec('BEGIN');
   try {
     db.prepare(`INSERT INTO orders
-      (id,ref,first_name,last_name,email,phone,address,city,pincode,payment,subtotal,shipping,total)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(id, ref, payload.firstName, payload.lastName, payload.email, payload.phone,
+      (id,ref,clerk_user_id,first_name,last_name,email,phone,address,city,pincode,payment,subtotal,shipping,total)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, ref, payload.clerkUserId || null,
+           payload.firstName, payload.lastName, payload.email, payload.phone,
            payload.address, payload.city, payload.pincode, payload.payment || 'UPI',
            subtotal, shipping, total);
 
@@ -331,10 +353,11 @@ export function getOrder(ref) {
   return o;
 }
 
-export function listOrders({ status, q, limit = 100 } = {}) {
+export function listOrders({ status, q, clerkUserId, limit = 100 } = {}) {
   let sql = 'SELECT * FROM orders WHERE 1=1';
   const args = [];
   if (status && status !== 'all') { sql += ' AND status = ?'; args.push(status); }
+  if (clerkUserId) { sql += ' AND clerk_user_id = ?'; args.push(clerkUserId); }
   if (q) { sql += ' AND (ref LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)';
            const like = `%${q}%`; args.push(like, like, like, like); }
   sql += ' ORDER BY created_at DESC LIMIT ?';
@@ -374,6 +397,26 @@ export function addSubscriber(email) {
 }
 export function listSubscribers() {
   return db.prepare('SELECT * FROM subscribers ORDER BY created_at DESC').all();
+}
+
+/* -------------------------------------------------------- customers -- */
+export function upsertCustomer({ clerkUserId, email, firstName, lastName, phone }) {
+  const row = db.prepare('SELECT * FROM customers WHERE clerk_user_id = ?').get(clerkUserId);
+  if (row) {
+    db.prepare(`UPDATE customers SET email = ?, last_seen_at = datetime('now'),
+                first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name),
+                phone = COALESCE(?, phone) WHERE clerk_user_id = ?`)
+      .run(email, firstName || null, lastName || null, phone || null, clerkUserId);
+  } else {
+    db.prepare(`INSERT INTO customers (id,clerk_user_id,email,first_name,last_name,phone)
+                VALUES (?,?,?,?,?,?)`)
+      .run(randomUUID(), clerkUserId, email, firstName || null, lastName || null, phone || null);
+  }
+  return db.prepare('SELECT * FROM customers WHERE clerk_user_id = ?').get(clerkUserId);
+}
+
+export function getCustomerOrders(clerkUserId) {
+  return listOrders({ clerkUserId, limit: 50 });
 }
 
 /* ------------------------------------------------------------ stats -- */

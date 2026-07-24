@@ -221,7 +221,7 @@ route('GET', /^\/api\/config$/, async (req, res) => ok(res, {
 
 /* Called once after Clerk sign-in so the shop keeps its own customer row. */
 route('POST', /^\/api\/me\/sync$/, async (req, res, m, url, user) => {
-  if (!DB.upsertCustomer) return bad(res, 'Customer accounts need DB_DRIVER=supabase', 501);
+  if (!DB.upsertCustomer) return bad(res, 'Customer accounts are unavailable', 501);
   const customer = await DB.upsertCustomer({
     clerkUserId: user.userId, email: user.email,
     firstName: user.firstName, lastName: user.lastName, phone: user.phone,
@@ -237,7 +237,7 @@ route('GET', /^\/api\/me$/, async (req, res, m, url, user) => ok(res, {
 
 /* A shopper sees only their own orders. */
 route('GET', /^\/api\/me\/orders$/, async (req, res, m, url, user) => {
-  if (!DB.getCustomerOrders) return bad(res, 'Order history needs DB_DRIVER=supabase', 501);
+  if (!DB.getCustomerOrders) return bad(res, 'Order history is unavailable', 501);
   const orders = await DB.getCustomerOrders(user.userId);
   ok(res, { orders: orders.map(o => ({
     ref: o.ref, status: o.status, total: o.total,
