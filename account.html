@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account — Aurelle</title>
+<meta name="description" content="Sign in to your Aurelle account.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1512'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8935a' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-page="account" data-nav="">
+<main id="main">
+  <div class="container"><nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Account</span></nav></div>
+  <section class="section">
+    <div class="narrow" style="max-width:460px">
+      <div class="panel">
+        <p class="eyebrow">Account</p>
+        <h3>Sign in</h3>
+        <form id="authForm" novalidate>
+          <div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" required></div>
+          <div class="field"><label for="authPass">Password</label><input id="authPass" type="password"></div>
+          <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+        </form>
+        <p class="muted center" style="font-size:var(--fs-xs);margin-top:var(--space-5)">
+          Accounts arrive with the backend. Your bag and wishlist are saved on this device until then.
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/media.js"></script>
+<script src="assets/js/cart.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

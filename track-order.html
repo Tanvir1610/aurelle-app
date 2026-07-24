@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track your order — Aurelle</title>
+<meta name="description" content="Track an Aurelle order with your order ID.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1512'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8935a' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-page="track" data-nav="">
+<main id="main">
+  <div class="container"><nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Track order</span></nav></div>
+  <section class="collection-band">
+    <div class="container"><p class="eyebrow">Order tracking</p><h1>Where is my parcel?</h1>
+      <p>Enter the order ID from your confirmation email. It looks like AUR123456.</p></div>
+  </section>
+  <section class="section">
+    <div class="narrow">
+      <form id="trackForm" class="panel" novalidate>
+        <div class="field"><label for="trackRef">Order ID</label><input id="trackRef" placeholder="AUR123456" required></div>
+        <div class="field"><label for="trackEmail">Email or phone</label><input id="trackEmail" placeholder="you@example.com"></div>
+        <button class="btn btn--gold btn--block" type="submit">Track order</button>
+      </form>
+      <div id="trackResult" style="margin-top:var(--space-6)"></div>
+      <p class="muted center" style="font-size:var(--fs-xs);margin-top:var(--space-6)">
+        Tracking shows sample data until the orders API is connected.
+      </p>
+    </div>
+  </section>
+</main>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/media.js"></script>
+<script src="assets/js/cart.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

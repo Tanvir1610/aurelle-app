@@ -1,0 +1,66 @@
+# Render blueprint for Aurelle.
+#
+# Deploy either by pointing Render at this file (Blueprints → New Blueprint
+# Instance) or by creating the service by hand using the values below.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# READ THIS FIRST — it decides whether your orders survive a restart.
+#
+# Render's FREE web services cannot mount a persistent disk. The database is
+# a SQLite file, so on the free plan it is wiped on every restart, redeploy
+# and wake-from-spin-down.
+#
+#   Free plan   → fine for a demo or portfolio link. SEED_DEMO=1 below refills
+#                 the dashboard on each boot so it is never empty. Real orders
+#                 placed by visitors will not survive.
+#
+#   Starter     → paid instance + the disk block below (uncomment it). SQLite
+#                 persists properly. This is the one to use for a real shop.
+#
+# The config below defaults to the FREE, demo-safe setup.
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: aurelle
+    runtime: node
+    plan: free              # change to "starter" for a persistent disk
+    region: singapore       # closest to India; also: oregon, frankfurt, ohio
+    branch: main
+
+    # No dependencies to install — the app is pure Node.
+    buildCommand: ""
+    startCommand: node server/server.js
+
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22.18.0"        # must be 22.5 or newer for node:sqlite
+
+      - key: ADMIN_EMAIL
+        sync: false             # Render prompts you for this on first deploy
+
+      - key: ADMIN_PASSWORD
+        sync: false             # set a real passphrase — never leave the default
+
+      - key: SESSION_SECRET
+        generateValue: true     # random, and stable across restarts
+
+      # Refill demo data on boot. Set to "0" once you are on a paid plan with
+      # a disk and want to keep real orders.
+      - key: SEED_DEMO
+        value: "1"
+
+      # Only needed when a disk is attached — see below.
+      # - key: DATA_DIR
+      #   value: /var/data
+
+    # ── Persistent storage (paid plans only) ────────────────────────────
+    # Uncomment this block AND set plan: starter above, then set SEED_DEMO
+    # to "0" and DATA_DIR to /var/data.
+    #
+    # disk:
+    #   name: aurelle-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

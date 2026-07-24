@@ -1,0 +1,20 @@
+{
+  "name": "aurelle-storefront",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "test": "node tools/smoke-test.mjs && node tools/interaction-test.mjs",
+    "test:api": "node tools/api-test.mjs",
+    "seed:demo": "node tools/seed-demo.mjs",
+    "art": "python3 tools/generate_art.py"
+  },
+  "dependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

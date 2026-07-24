@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkout — Aurelle</title>
+<meta name="description" content="Secure checkout for your Aurelle order.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1512'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8935a' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-page="checkout" data-nav="">
+<main id="main">
+  <div class="container">
+    <nav class="crumbs"><a href="cart.html">Bag</a><span>/</span><span>Checkout</span></nav>
+    <div class="section section--tight">
+      <div class="cart-page">
+        <form class="panel" id="coForm" novalidate>
+          <h3>Delivery details</h3>
+          <div class="field-row">
+            <div class="field"><label for="fn">First name</label><input id="fn" name="firstName" required><span class="field__err">Enter your first name</span></div>
+            <div class="field"><label for="ln">Last name</label><input id="ln" name="lastName" required><span class="field__err">Enter your last name</span></div>
+          </div>
+          <div class="field"><label for="em">Email</label><input id="em" type="email" name="email" required><span class="field__err">Enter a valid email address</span></div>
+          <div class="field"><label for="ph">Phone</label><input id="ph" name="phone" inputmode="numeric" required placeholder="10-digit mobile number"><span class="field__err">Enter a 10-digit Indian mobile number</span></div>
+          <div class="field"><label for="ad">Address</label><textarea id="ad" name="address" required></textarea><span class="field__err">Enter your full address</span></div>
+          <div class="field-row">
+            <div class="field"><label for="ct">City</label><input id="ct" name="city" required><span class="field__err">Enter your city</span></div>
+            <div class="field"><label for="pc">Pincode</label><input id="pc" name="pincode" inputmode="numeric" required><span class="field__err">Enter a 6-digit pincode</span></div>
+          </div>
+
+          <h3 style="margin-top:var(--space-7)">Payment</h3>
+          <div class="field">
+            <label for="pm">Method</label>
+            <select id="pm" name="payment">
+              <option>UPI</option><option>Credit or debit card</option>
+              <option>Net banking</option><option>Cash on delivery (+₹49)</option>
+            </select>
+          </div>
+          <p class="muted" style="font-size:var(--fs-xs)">
+            Payment is not wired up yet — this form validates and creates a local order reference.
+            The single call to replace sits in <code>app.js</code>, marked “Backend hook”.
+          </p>
+          <button class="btn btn--gold btn--block" type="submit" style="margin-top:var(--space-5)">Place order</button>
+        </form>
+        <div class="panel" id="coSummary"></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/media.js"></script>
+<script src="assets/js/cart.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

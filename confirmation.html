@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order confirmed — Aurelle</title>
+<meta name="description" content="Your Aurelle order is confirmed.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1512'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8935a' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-page="confirmation" data-nav="">
+<main id="main">
+  <section class="section center">
+    <div class="narrow">
+      <p class="eyebrow">Order confirmed</p>
+      <h1 style="font-size:var(--fs-h1)">Thank you. It is on its way.</h1>
+      <p class="muted" style="margin-top:var(--space-4)">
+        Your order reference is <strong id="confRef">—</strong>. A confirmation is on its way to your
+        inbox, and you will get a tracking link by SMS the moment the parcel leaves our Ahmedabad warehouse.
+      </p>
+      <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-7);flex-wrap:wrap">
+        <a class="btn btn--primary" href="track-order.html">Track this order</a>
+        <a class="btn btn--ghost" href="collection.html">Keep shopping</a>
+      </div>
+    </div>
+  </section>
+  <section class="section section--alt">
+    <div class="container">
+      <div class="section-head section-head--center"><p class="eyebrow">You might also like</p><h2>Bought together, often</h2></div>
+      <div class="product-grid" id="confPicks"></div>
+    </div>
+  </section>
+</main>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/media.js"></script>
+<script src="assets/js/cart.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

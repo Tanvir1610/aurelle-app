@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop all jewellery — Aurelle</title>
+<meta name="description" content="Filter Aurelle jewellery by category, price, metal and occasion. Anti-tarnish, skin-friendly, 7-day returns.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1512'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23b8935a' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-page="collection" data-nav="Shop">
+<main id="main">
+  <div class="container">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="index.html">Home</a><span>/</span><span id="plpCrumb">All jewellery</span>
+    </nav>
+  </div>
+
+  <section class="collection-band">
+    <div class="container">
+      <p class="eyebrow">The collection</p>
+      <h1 id="plpTitle">All jewellery</h1>
+      <p>Every piece is 24Kt gold-plated over nickel-free brass, sealed against tarnish and covered for six months.</p>
+    </div>
+  </section>
+
+  <section class="section section--tight" id="plpTop">
+    <div class="container">
+      <div class="plp">
+        <aside>
+          <div class="filters">
+            <div class="field" style="margin-bottom:var(--space-5)">
+              <label for="plpSearch">Search</label>
+              <input type="search" id="plpSearch" placeholder="Try “pearl” or “choker”">
+            </div>
+            <div id="filters"></div>
+          </div>
+        </aside>
+
+        <div>
+          <div class="plp__bar">
+            <span class="plp__count" id="plpCount">—</span>
+            <label style="display:flex;align-items:center;gap:var(--space-3);font-size:var(--fs-xs);letter-spacing:var(--ls-wide);text-transform:uppercase;color:var(--text-secondary)">
+              Sort
+              <select class="select" id="plpSort" aria-label="Sort products">
+                <option value="featured">Featured</option>
+                <option value="new">Newest first</option>
+                <option value="popular">Most reviewed</option>
+                <option value="rating">Highest rated</option>
+                <option value="low">Price: low to high</option>
+                <option value="high">Price: high to low</option>
+              </select>
+            </label>
+          </div>
+          <div class="chips" id="activeChips"></div>
+          <div id="plpGrid"></div>
+          <div class="pagination" id="plpPager"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/media.js"></script>
+<script src="assets/js/cart.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
