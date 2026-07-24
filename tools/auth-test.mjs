@@ -29,6 +29,10 @@ const DB = await import('../server/db.js');
 function reset() {
   DB.db.exec('DELETE FROM admins');
 }
+function setDriver(d) {
+  if (d === null) delete process.env.AUTH_DRIVER;
+  else process.env.AUTH_DRIVER = d;
+}
 function setEnv(email, password) {
   if (email === null) delete process.env.ADMIN_EMAIL;
   else process.env.ADMIN_EMAIL = email;
@@ -44,6 +48,7 @@ function canLogin(email, password) {
 
 console.log('\n── bug 1: capitals in the admin email ──────────');
 {
+  setDriver(null);
   reset();
   setEnv('Owner@MyShop.com', 'MyPass123');
   const r = DB.ensureAdmin();
@@ -123,8 +128,70 @@ console.log('\n── restart with nothing configured ────────�
   t('defaults are not resurrected', !canLogin('admin@aurelle.local', 'aurelle-admin'));
 }
 
+console.log('\n── Clerk mode: the dashboard allow-list ────────');
+{
+  // The live bug: with AUTH_DRIVER=clerk there is no password, so no admin
+  // row was ever created and every sign-in was refused with 403.
+  reset();
+  setDriver('clerk');
+  setEnv('vhoratanvir1610@gmail.com', null);
+
+  const r = DB.ensureAdmin();
+  t('email alone is enough under Clerk', r.mode === 'created', JSON.stringify(r));
+  t('the account is on the list',
+     DB.listAdmins().some(a => a.email === 'vhoratanvir1610@gmail.com'));
+
+  const found = DB.isAdmin({ email: 'vhoratanvir1610@gmail.com' });
+  t('lookup by email succeeds', !!found, JSON.stringify(found));
+  t('the role is owner', found && found.role === 'owner');
+  t('capitals do not matter', !!DB.isAdmin({ email: 'VhoraTanvir1610@Gmail.com' }));
+
+  // First sign-in binds the Clerk id so later checks skip the email.
+  DB.isAdmin({ clerkUserId: 'user_2abc', email: 'vhoratanvir1610@gmail.com' });
+  t('the Clerk id is bound on first sign-in', !!DB.isAdmin({ clerkUserId: 'user_2abc' }));
+
+  t('a stranger is refused', DB.isAdmin({ email: 'random@example.com' }) === null);
+  t('an unknown Clerk id is refused', DB.isAdmin({ clerkUserId: 'user_nope' }) === null);
+  t('no arguments is refused', DB.isAdmin({}) === null);
+}
+
+console.log('\n── Clerk mode: the published default is removed ─');
+{
+  reset();
+  setDriver(null);
+  setEnv(null, null);
+  DB.ensureAdmin();  // seeds admin@aurelle.local
+  t('default exists first', !!DB.isAdmin({ email: 'admin@aurelle.local' }));
+
+  setDriver('clerk');
+  setEnv('vhoratanvir1610@gmail.com', null);
+  const r = DB.ensureAdmin();
+  t('default is deleted once a real admin is set', r.removedDefault === true);
+  t('default can no longer reach the dashboard',
+     DB.isAdmin({ email: 'admin@aurelle.local' }) === null);
+}
+
+console.log('\n── Clerk mode: adding a second administrator ───');
+{
+  reset();
+  setDriver('clerk');
+  setEnv('vhoratanvir1610@gmail.com', null);
+  DB.ensureAdmin();
+
+  DB.addAdmin({ email: 'Manager@Shop.com', name: 'Shop manager' });
+  t('second admin is added lowercase', !!DB.isAdmin({ email: 'manager@shop.com' }));
+  t('their role defaults to manager',
+     DB.isAdmin({ email: 'manager@shop.com' }).role === 'manager');
+  t('the owner is unaffected', !!DB.isAdmin({ email: 'vhoratanvir1610@gmail.com' }));
+  t('both are listed', DB.listAdmins().length === 2);
+
+  DB.ensureAdmin();
+  t('a restart keeps both', DB.listAdmins().length === 2);
+}
+
 console.log('\n── the manual reset tool ───────────────────────');
 {
+  setDriver(null);
   reset();
   setEnv(null, null);
   DB.ensureAdmin();
@@ -142,6 +209,7 @@ console.log('\n── the manual reset tool ────────────
 
 console.log('\n── two admins can coexist ──────────────────────');
 {
+  setDriver(null);   // back to local password auth for this block
   reset();
   setEnv('owner@myshop.com', 'OwnerPass123');
   DB.ensureAdmin();

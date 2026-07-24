@@ -103,12 +103,14 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 CREATE TABLE IF NOT EXISTS admins (
-  id         TEXT PRIMARY KEY,
-  email      TEXT UNIQUE NOT NULL,
-  name       TEXT NOT NULL,
-  pass_hash  TEXT NOT NULL,
-  pass_salt  TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
+  id            TEXT PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
+  name          TEXT NOT NULL,
+  pass_hash     TEXT NOT NULL,
+  pass_salt     TEXT NOT NULL,
+  clerk_user_id TEXT,
+  role          TEXT DEFAULT 'owner',
+  created_at    TEXT DEFAULT (datetime('now'))
 );
 
 `);
@@ -123,6 +125,8 @@ CREATE TABLE IF NOT EXISTS admins (
    skipped, so this is safe to run on every boot forever.                */
 const COLUMN_MIGRATIONS = [
   ['orders', 'clerk_user_id', 'TEXT'],
+  ['admins', 'clerk_user_id', 'TEXT'],
+  ['admins', 'role', "TEXT DEFAULT 'owner'"],
 ];
 
 function migrate() {
@@ -184,7 +188,26 @@ const DEFAULT_ADMIN_PASS = 'aurelle-admin';
 export function ensureAdmin() {
   const email = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
   const pass = process.env.ADMIN_PASSWORD || '';
+  const usingClerk = (process.env.AUTH_DRIVER || '').toLowerCase() === 'clerk';
   const count = db.prepare('SELECT COUNT(*) AS a FROM admins').get().a;
+
+  /* Under Clerk, identity lives in Clerk and this table only decides who
+     may open the dashboard. An email on its own is therefore enough —
+     there is no password to set. The password columns are NOT NULL, so we
+     store an unusable random value rather than leaving them empty. */
+  if (usingClerk && email) {
+    const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
+    if (!existing) {
+      const { salt, hash } = hashPassword(randomUUID());
+      db.prepare(`INSERT INTO admins (id,email,name,pass_hash,pass_salt,role)
+                  VALUES (?,?,?,?,?,?)`)
+        .run(randomUUID(), email, 'Store owner', hash, salt, 'owner');
+    }
+    const removed = db.prepare('DELETE FROM admins WHERE email = ? AND email != ?')
+      .run(DEFAULT_ADMIN_EMAIL, email).changes;
+    return { mode: existing ? 'existing' : 'created', email,
+             removedDefault: removed > 0, driver: 'clerk' };
+  }
 
   // Only one half supplied — tell them rather than half-applying it.
   if ((email && !pass) || (!email && pass)) {
@@ -223,6 +246,40 @@ export function ensureAdmin() {
   return { mode: 'existing' };
 }
 
+/**
+ * Is this caller an administrator?
+ * Matches on the Clerk user id first, then the email address, and binds
+ * the Clerk id to the row on first successful sign-in.
+ */
+export function isAdmin({ clerkUserId, email } = {}) {
+  let row = null;
+  if (clerkUserId) {
+    row = db.prepare('SELECT * FROM admins WHERE clerk_user_id = ?').get(clerkUserId);
+  }
+  if (!row && email) {
+    row = db.prepare('SELECT * FROM admins WHERE email = ?')
+      .get(String(email).toLowerCase().trim());
+  }
+  if (!row) return null;
+
+  if (clerkUserId && !row.clerk_user_id) {
+    db.prepare('UPDATE admins SET clerk_user_id = ? WHERE id = ?').run(clerkUserId, row.id);
+  }
+  return { email: row.email, name: row.name, role: row.role || 'owner' };
+}
+
+/** Add someone to the dashboard allow-list. */
+export function addAdmin({ email, name, role = 'manager' }) {
+  const addr = String(email || '').toLowerCase().trim();
+  const existing = db.prepare('SELECT * FROM admins WHERE email = ?').get(addr);
+  if (existing) return { email: addr, name: existing.name, role: existing.role || role };
+  const { salt, hash } = hashPassword(randomUUID());
+  db.prepare(`INSERT INTO admins (id,email,name,pass_hash,pass_salt,role)
+              VALUES (?,?,?,?,?,?)`)
+    .run(randomUUID(), addr, name || 'Store manager', hash, salt, role);
+  return { email: addr, name: name || 'Store manager', role };
+}
+
 /** Set an admin password directly — used by tools/set-password.mjs. */
 export function setAdminPassword(rawEmail, plain) {
   const email = String(rawEmail || '').toLowerCase().trim();
@@ -239,7 +296,8 @@ export function setAdminPassword(rawEmail, plain) {
 }
 
 export function listAdmins() {
-  return db.prepare('SELECT email, name, created_at FROM admins ORDER BY created_at').all();
+  return db.prepare(
+    'SELECT email, name, role, clerk_user_id, created_at FROM admins ORDER BY created_at').all();
 }
 
 export function seedIfEmpty() {
