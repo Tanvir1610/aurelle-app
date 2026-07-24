@@ -675,13 +675,133 @@
 
   /* ================================================== ACCOUNT ==== */
   function account() {
-    $('#authForm').addEventListener('submit', e => {
-      e.preventDefault();
-      const email = $('#authEmail').value;
-      if (!email.includes('@')) { toast('Enter a valid email address'); return; }
-      /* Backend hook: POST /api/auth/login */
-      toast('Sign-in needs the backend. Coming in phase two.');
-    });
+    const box = $('#accountBox');
+
+    const money = n => inr(n);
+    const when = iso => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return isNaN(d) ? '' : d.toLocaleDateString('en-IN',
+        { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    async function paintOrders() {
+      const host = $('#myOrders');
+      if (!host) return;
+      host.innerHTML = '<p class="muted">Loading your orders…</p>';
+      try {
+        const { orders } = await window.AU_API.myOrders();
+        host.innerHTML = orders.length ? orders.map(o => `
+          <div class="panel" style="margin-bottom:var(--space-4)">
+            <div style="display:flex;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap">
+              <div>
+                <p class="eyebrow">${esc(o.ref)}</p>
+                <strong style="font-family:var(--font-display);font-size:var(--fs-h5)">
+                  ${esc(o.status[0].toUpperCase() + o.status.slice(1))}</strong>
+                <div class="muted" style="font-size:var(--fs-xs)">
+                  ${when(o.placedAt)} · to ${esc(o.city)}</div>
+              </div>
+              <div style="text-align:right">
+                <strong>${money(o.total)}</strong>
+                <div class="muted" style="font-size:var(--fs-xs)">
+                  ${o.items.length} item${o.items.length === 1 ? '' : 's'}</div>
+              </div>
+            </div>
+            <div class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-4)">
+              ${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join('<br>')}
+            </div>
+            <a class="btn btn--ghost btn--sm" style="margin-top:var(--space-4)"
+               href="track-order.html">Track this order</a>
+          </div>`).join('')
+          : `<div class="empty"><h3>No orders yet</h3>
+               <p>When you buy something it will show up here.</p>
+               <a class="btn btn--primary" href="collection.html">Start shopping</a></div>`;
+      } catch (e) {
+        host.innerHTML = `<div class="panel"><p class="muted">
+          Could not load your orders: ${esc(e.message)}</p></div>`;
+      }
+    }
+
+    function paint(snap) {
+      // Still starting up — say so rather than showing an empty page.
+      if (!snap.ready) {
+        box.innerHTML = `<div class="panel center">
+          <p class="muted">Loading your account…</p></div>`;
+        return;
+      }
+
+      // Clerk is switched on but could not start (offline, blocked, slow CDN).
+      if (snap.enabled && snap.error) {
+        box.innerHTML = `<div class="panel center">
+          <p class="eyebrow">Sign-in unavailable</p>
+          <h3>We could not reach the sign-in service</h3>
+          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
+            ${esc(snap.error)}</p>
+          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
+            Your bag and checkout still work — you can order as a guest.</p>
+          <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-6);flex-wrap:wrap">
+            <button class="btn btn--gold" type="button" id="retryAuth">Try again</button>
+            <a class="btn btn--ghost" href="collection.html">Keep shopping</a>
+          </div>
+        </div>`;
+        $('#retryAuth').addEventListener('click', () => window.AU_AUTH.retry());
+        return;
+      }
+
+      // Running without Clerk configured at all.
+      if (!snap.enabled) {
+        box.innerHTML = `<div class="panel center">
+          <p class="eyebrow">Guest checkout</p>
+          <h3>Accounts are not switched on yet</h3>
+          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
+            You can still order without an account, and track any order with the
+            reference from your confirmation email.</p>
+          <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-6);flex-wrap:wrap">
+            <a class="btn btn--primary" href="track-order.html">Track an order</a>
+            <a class="btn btn--ghost" href="collection.html">Start shopping</a>
+          </div>
+        </div>`;
+        return;
+      }
+
+      if (!snap.signedIn) {
+        box.innerHTML = `<div class="panel center">
+          <p class="eyebrow">Your account</p>
+          <h3>Sign in to see your orders</h3>
+          <p class="muted" style="font-size:var(--fs-sm);margin-bottom:var(--space-6)">
+            We email you a one-time code — there is no password to remember.</p>
+          <div style="display:flex;gap:var(--space-3);justify-content:center;flex-wrap:wrap">
+            <button class="btn btn--gold" type="button" id="doSignIn">Sign in</button>
+            <button class="btn btn--ghost" type="button" id="doSignUp">Create an account</button>
+          </div>
+        </div>`;
+        $('#doSignIn').addEventListener('click', () => window.AU_AUTH.signIn());
+        $('#doSignUp').addEventListener('click', () => window.AU_AUTH.signUp());
+        return;
+      }
+
+      box.innerHTML = `
+        <div class="panel" style="margin-bottom:var(--space-6)">
+          <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap">
+            <div>
+              <p class="eyebrow">Signed in</p>
+              <strong style="font-family:var(--font-display);font-size:var(--fs-h4)">
+                ${esc(snap.user.name)}</strong>
+              <div class="muted" style="font-size:var(--fs-sm)">${esc(snap.user.email || '')}</div>
+            </div>
+            <button class="btn btn--ghost btn--sm" type="button" id="doSignOut"
+                    style="margin-left:auto">Sign out</button>
+          </div>
+        </div>
+        <div class="section-head"><p class="eyebrow">Order history</p><h2>Your orders</h2></div>
+        <div id="myOrders"></div>`;
+      $('#doSignOut').addEventListener('click', () => window.AU_AUTH.signOut());
+      paintOrders();
+    }
+
+    box.innerHTML = '<div class="panel center"><p class="muted">Loading your account…</p></div>';
+    if (window.AU_AUTH) window.AU_AUTH.subscribe(paint);
+    else paint({ enabled: false, ready: true });
   }
 
   /* ==================================================== BOOT ===== */
@@ -691,16 +811,24 @@
   document.addEventListener('DOMContentLoaded', async () => {
     const page = document.body.dataset.page;
 
-    // Pull the live catalogue if a backend is reachable; otherwise
-    // carry on with the bundled data.
+    // The catalogue decides what products render, so wait for it — but it
+    // carries its own short timeout and falls back to the bundled data.
     if (window.AU_API) {
       try { await window.AU_API.init(); } catch (err) { /* static mode */ }
     }
 
+    // Paint the page NOW. Nothing below this line may block rendering.
     window.AU.mount(document.body.dataset.nav || '');
     if (ROUTES[page]) {
       try { ROUTES[page](); } catch (err) { console.error(`[aurelle] ${page} failed:`, err); }
     }
     window.AU.reveal();
+
+    // Sign-in resolves in the background. Anything that cares subscribed
+    // during render and repaints when this lands, so a slow or unreachable
+    // auth service can never leave the page blank.
+    if (window.AU_AUTH) {
+      window.AU_AUTH.init().catch(() => { /* guest mode */ });
+    }
   });
 })();

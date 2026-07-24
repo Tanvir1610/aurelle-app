@@ -405,6 +405,23 @@ window.AU = (function () {
     });
   }
 
+  /* Header account control follows the Clerk session. */
+  function wireAccount() {
+    if (!window.AU_AUTH) return;
+    window.AU_AUTH.subscribe(snap => {
+      const link = document.querySelector('a[href="account.html"]');
+      if (!link) return;
+      if (snap.enabled && snap.signedIn) {
+        link.setAttribute('aria-label', `Account — ${snap.user.name}`);
+        link.title = snap.user.email || snap.user.name;
+        link.style.color = 'var(--gold-600)';
+      } else {
+        link.style.color = '';
+        link.title = snap.enabled ? 'Sign in' : 'Account';
+      }
+    });
+  }
+
   /* Badge counts stay in sync everywhere. */
   function wireCounts() {
     C().subscribe(snap => {
@@ -427,6 +444,7 @@ window.AU = (function () {
     announceRotator();
     wireGlobal();
     wireCounts();
+    wireAccount();
     reveal();
   }
 

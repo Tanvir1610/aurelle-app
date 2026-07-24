@@ -18,13 +18,24 @@ window.AU_API = (function () {
   let online = false;
   const isOnline = () => online;
 
-  async function req(path, { method = 'GET', body, timeout = 6000 } = {}) {
+  async function req(path, { method = 'GET', body, timeout = 6000, auth = true } = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
+
+    const headers = body ? { 'content-type': 'application/json' } : {};
+
+    // Attach the Clerk session token when the shopper is signed in, so
+    // orders are linked to their account instead of being anonymous.
+    if (auth && window.AU_AUTH) {
+      try {
+        const t = await window.AU_AUTH.token();
+        if (t) headers.authorization = `Bearer ${t}`;
+      } catch (e) { /* guest */ }
+    }
+
     try {
       const res = await fetch(BASE + path, {
-        method,
-        headers: body ? { 'content-type': 'application/json' } : {},
+        method, headers,
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });
@@ -85,5 +96,11 @@ window.AU_API = (function () {
     return req('/api/newsletter', { method: 'POST', body: { email } });
   }
 
-  return { init, isOnline, createOrder, trackOrder, contact, subscribe, req };
+  /* ---------------------------------------------- customer area -- */
+  async function myOrders() {
+    if (!online) return { orders: [] };
+    return req('/api/me/orders');
+  }
+
+  return { init, isOnline, createOrder, trackOrder, contact, subscribe, myOrders, req };
 })();
