@@ -28,7 +28,7 @@ const CASES = [
   ['faq.html', ['#faqList .accordion__item']],
   ['journal.html', ['#journalGrid .tile', '#journalList article']],
   ['track-order.html', ['#trackForm']],
-  ['account.html', ['#authForm']],
+  ['account.html', ['#accountBox']],
 ];
 
 let failures = 0;

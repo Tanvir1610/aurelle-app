@@ -10,10 +10,34 @@
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
   const TOKEN_KEY = 'aurelle.admin.token';
-  let token = null;
+  let token = null;                 // local-auth token
+  let cfg = { auth: 'local' };      // filled from /api/config
+  let clerk = null;                 // Clerk instance when auth=clerk
   let cache = { products: [], orders: [], messages: [], subs: [] };
 
   try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) { token = null; }
+
+  /** Current bearer token, whichever auth driver is active. */
+  async function bearer() {
+    if (cfg.auth === 'clerk') {
+      if (!clerk || !clerk.session) return null;
+      try { return await clerk.session.getToken(); } catch (e) { return null; }
+    }
+    return token;
+  }
+
+  function loadClerkScript(publishableKey, frontendApi) {
+    return new Promise((resolve, reject) => {
+      if (window.Clerk) return resolve(window.Clerk);
+      const s = document.createElement('script');
+      s.async = true; s.crossOrigin = 'anonymous';
+      s.dataset.clerkPublishableKey = publishableKey;
+      s.src = `https://${frontendApi}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+      s.onload = () => resolve(window.Clerk);
+      s.onerror = () => reject(new Error('Clerk failed to load'));
+      document.head.appendChild(s);
+    });
+  }
 
   /* ---------------------------------------------------- helpers -- */
   const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -34,10 +58,18 @@
   async function api(path, { method = 'GET', body } = {}) {
     const headers = {};
     if (body) headers['content-type'] = 'application/json';
-    if (token) headers.authorization = `Bearer ${token}`;
+    const t = await bearer();
+    if (t) headers.authorization = `Bearer ${t}`;
     const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
 
-    if (res.status === 401 && token) { signOut(); throw new Error('Session expired — sign in again'); }
+    if (res.status === 401 && t) { signOut(); throw new Error('Session expired — sign in again'); }
+    if (res.status === 403) {
+      const who = cfg.auth === 'clerk' && clerk && clerk.user
+        ? (clerk.user.primaryEmailAddress?.emailAddress || 'This account')
+        : 'This account';
+      showDenied(who);
+      throw new Error('Not an administrator');
+    }
     let data = null;
     try { data = await res.json(); } catch (e) { /* empty body */ }
     if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
@@ -53,16 +85,71 @@
     loadAll();
   }
 
-  function signOut() {
+  async function signOut() {
     token = null;
     try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    if (cfg.auth === 'clerk' && clerk) { try { await clerk.signOut(); } catch (e) {} }
     $('#appView').hidden = true;
     $('#loginView').hidden = false;
     $('#loginForm').reset();
+    renderLogin();
+  }
+
+  /** Signed in with Clerk, but not on the admin allow-list. */
+  function showDenied(who) {
+    $('#appView').hidden = true;
+    $('#loginView').hidden = false;
+    $('#loginPanel').innerHTML = `
+      <h1>Not an administrator</h1>
+      <p style="font-size:var(--fs-sm);color:var(--text-secondary);line-height:var(--lh-relaxed)">
+        <strong>${who}</strong> signed in successfully, but is not on the admin
+        list for this shop.
+      </p>
+      <div class="login-hint" style="margin-top:var(--space-5)">
+        Add this address to <code>aurelle_admins</code> in Supabase, or set
+        <code>ADMIN_EMAIL</code> to it and restart the server.
+      </div>
+      <button class="btn btn--ghost btn--block" type="button" id="denyOut"
+              style="margin-top:var(--space-5)">Sign out</button>`;
+    $('#denyOut').addEventListener('click', signOut);
+  }
+
+  /** Paints either the Clerk button or the password form. */
+  function renderLogin() {
+    const panel = $('#loginPanel');
+    if (cfg.auth === 'clerk') {
+      panel.innerHTML = `
+        <h1>Store dashboard</h1>
+        <p style="font-size:var(--fs-sm);color:var(--text-secondary);text-align:center;margin-bottom:var(--space-6)">
+          We email you a one-time code.
+        </p>
+        <button class="btn btn--gold btn--block" type="button" id="clerkSignIn">Sign in with email</button>
+        <div class="login-hint">
+          Only addresses in the admin list can open this dashboard. Signing in
+          with any other account is refused.
+        </div>`;
+      $('#clerkSignIn').addEventListener('click', () => {
+        if (clerk) clerk.openSignIn({ afterSignInUrl: window.location.href });
+      });
+    } else {
+      panel.innerHTML = `
+        <h1>Store dashboard</h1>
+        <div class="field"><label for="email">Email</label>
+          <input id="email" type="email" autocomplete="username" required></div>
+        <div class="field"><label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" required></div>
+        <div id="loginError" style="display:none;color:var(--red-500);font-size:var(--fs-xs);margin-bottom:var(--space-4)"></div>
+        <button class="btn btn--primary btn--block" type="submit" id="loginBtn">Sign in</button>
+        <div class="login-hint">
+          Set <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code> to change these.
+          They are re-applied on every restart.
+        </div>`;
+    }
   }
 
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (cfg.auth === 'clerk') return;
     const err = $('#loginError');
     const btn = $('#loginBtn');
     err.style.display = 'none';
@@ -345,6 +432,38 @@
 
   /* -------------------------------------------------------- boot -- */
   (async function boot() {
+    try {
+      cfg = await (await fetch('/api/config')).json();
+    } catch (e) { cfg = { auth: 'local' }; }
+
+    renderLogin();
+
+    if (cfg.auth === 'clerk' && cfg.clerk && cfg.clerk.enabled) {
+      try {
+        await loadClerkScript(cfg.clerk.publishableKey, cfg.clerk.frontendApi);
+        clerk = window.Clerk;
+        await clerk.load({ afterSignOutUrl: window.location.href });
+        clerk.addListener(async () => {
+          if (clerk.user && $('#appView').hidden) {
+            try {
+              const me = await api('/api/auth/me');
+              showApp(me.user);
+            } catch (e) { /* showDenied already ran on 403 */ }
+          }
+        });
+        if (clerk.user) {
+          try {
+            const me = await api('/api/auth/me');
+            showApp(me.user);
+          } catch (e) { /* handled */ }
+        }
+      } catch (e) {
+        $('#loginPanel').innerHTML =
+          `<h1>Clerk could not load</h1><p style="font-size:var(--fs-sm);color:var(--red-500)">${e.message}</p>`;
+      }
+      return;
+    }
+
     if (!token) return;
     try {
       const me = await api('/api/auth/me');

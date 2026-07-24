@@ -10,11 +10,13 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve, dirname, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import * as DB from './db.js';
+import * as DB from './data.js';
+import * as Clerk from './auth-clerk.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3000);
 const SECRET = process.env.SESSION_SECRET || randomBytes(32).toString('hex');
+const AUTH_DRIVER = (process.env.AUTH_DRIVER || (Clerk.isConfigured() ? 'clerk' : 'local')).toLowerCase();
 
 /* ============================================================ tokens == */
 /* Signed, expiring tokens. Stateless, so restarts do not log you out
@@ -63,10 +65,35 @@ async function readBody(req, limit = 1_000_000) {
   catch { throw new Error('Invalid JSON body'); }
 }
 
-function requireAuth(req) {
+/**
+ * Who is calling?
+ *   { user }            a signed-in shopper
+ *   { user, admin }     a shopper who is also on the admin allow-list
+ *   null                nobody
+ *
+ * Under AUTH_DRIVER=clerk the token is a Clerk session JWT. Under
+ * 'local' it is the HMAC token issued by /api/auth/login.
+ */
+async function resolveAuth(req) {
+  if (AUTH_DRIVER === 'clerk') {
+    const who = await Clerk.identify(req);
+    if (!who || who.error) return null;
+
+    let admin = null;
+    if (DB.isAdmin) {
+      try {
+        admin = await DB.isAdmin({ clerkUserId: who.userId, email: who.email });
+      } catch (e) {
+        console.error('[auth] admin lookup failed:', e.message);
+      }
+    }
+    return { user: who, admin };
+  }
+
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
-  return token ? verify(token) : null;
+  const payload = token ? verify(token) : null;
+  return payload ? { user: payload, admin: payload } : null;
 }
 
 /* Validation shared with the frontend rules. */
@@ -77,17 +104,18 @@ const isPin   = v => /^\d{6}$/.test(String(v || '').trim());
 /* ============================================================ routes == */
 const routes = [];
 const route = (method, pattern, handler, opts = {}) =>
-  routes.push({ method, pattern, handler, auth: !!opts.auth });
+  routes.push({ method, pattern, handler,
+                auth: !!opts.auth, customer: !!opts.customer });
 
 /* ---------------------------------------------------------- public --- */
 route('GET', /^\/api\/health$/, async (req, res) =>
   ok(res, { status: 'up', time: new Date().toISOString() }));
 
 /* Drop-in replacement for the bundled AU_DATA object. */
-route('GET', /^\/api\/catalogue$/, async (req, res) => ok(res, DB.catalogue()));
+route('GET', /^\/api\/catalogue$/, async (req, res) => ok(res, await DB.catalogue()));
 
 route('GET', /^\/api\/products$/, async (req, res, m, url) => {
-  let list = DB.listProducts();
+  let list = await DB.listProducts();
   const cat = url.searchParams.get('cat');
   const metal = url.searchParams.get('metal');
   const max = url.searchParams.get('max');
@@ -100,12 +128,27 @@ route('GET', /^\/api\/products$/, async (req, res, m, url) => {
 });
 
 route('GET', /^\/api\/products\/([\w-]+)$/, async (req, res, m) => {
-  const p = DB.getProduct(m[1]);
+  const p = await DB.getProduct(m[1]);
   return p ? ok(res, p) : bad(res, 'Product not found', 404);
 });
 
 route('POST', /^\/api\/orders$/, async (req, res) => {
   const b = await readBody(req);
+
+  // Attach the shopper's identity when signed in, so the order shows up
+  // in their history. Guest checkout stays available.
+  const who = await resolveAuth(req);
+  if (who && who.user && who.user.userId) {
+    b.clerkUserId = who.user.userId;
+    if (DB.upsertCustomer) {
+      try {
+        await DB.upsertCustomer({
+          clerkUserId: who.user.userId, email: who.user.email,
+          firstName: b.firstName, lastName: b.lastName, phone: b.phone,
+        });
+      } catch (e) { console.error('[orders] customer sync:', e.message); }
+    }
+  }
   const missing = ['firstName', 'lastName', 'email', 'phone', 'address', 'city', 'pincode']
     .filter(f => !String(b[f] || '').trim());
   if (missing.length) return bad(res, `Missing: ${missing.join(', ')}`);
@@ -113,13 +156,13 @@ route('POST', /^\/api\/orders$/, async (req, res) => {
   if (!isPhone(b.phone)) return bad(res, 'Invalid phone number');
   if (!isPin(b.pincode)) return bad(res, 'Invalid pincode');
   try {
-    const order = DB.createOrder(b);
+    const order = await DB.createOrder(b);
     json(res, 201, { ref: order.ref, total: order.total, status: order.status });
   } catch (e) { bad(res, e.message); }
 });
 
 route('GET', /^\/api\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
-  const o = DB.getOrder(m[1].toUpperCase());
+  const o = await DB.getOrder(m[1].toUpperCase());
   if (!o) return bad(res, 'Order not found', 404);
   const steps = ['placed', 'packed', 'shipped', 'delivered'];
   ok(res, {
@@ -136,7 +179,7 @@ route('GET', /^\/api\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
 route('POST', /^\/api\/newsletter$/, async (req, res) => {
   const { email } = await readBody(req);
   if (!isEmail(email)) return bad(res, 'Invalid email address');
-  DB.addSubscriber(email);
+  await DB.addSubscriber(email);
   ok(res, { subscribed: true });
 });
 
@@ -145,7 +188,7 @@ route('POST', /^\/api\/contact$/, async (req, res) => {
   if (!String(b.name || '').trim()) return bad(res, 'Name is required');
   if (!isEmail(b.email)) return bad(res, 'Invalid email address');
   if (!String(b.body || '').trim()) return bad(res, 'Message is required');
-  DB.createMessage(b);
+  await DB.createMessage(b);
   json(res, 201, { received: true });
 });
 
@@ -163,13 +206,62 @@ route('POST', /^\/api\/auth\/login$/, async (req, res) => {
 });
 
 route('GET', /^\/api\/auth\/me$/, async (req, res, m, url, user) =>
-  ok(res, { user: { email: user.email, name: user.name } }), { auth: true });
+  ok(res, { user: { email: user.email,
+                    name: user.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
+                    role: user.admin?.role || 'owner' } }), { auth: true });
+
+/* -------------------------------------------------- customer area --- */
+/* What the browser needs to boot Clerk. Publishable key only. */
+route('GET', /^\/api\/config$/, async (req, res) => ok(res, {
+  auth: AUTH_DRIVER,
+  clerk: Clerk.publicConfig(),
+  db: DB.DB_DRIVER,
+  freeShippingAt: 999,
+}));
+
+/* Called once after Clerk sign-in so the shop keeps its own customer row. */
+route('POST', /^\/api\/me\/sync$/, async (req, res, m, url, user) => {
+  if (!DB.upsertCustomer) return bad(res, 'Customer accounts need DB_DRIVER=supabase', 501);
+  const customer = await DB.upsertCustomer({
+    clerkUserId: user.userId, email: user.email,
+    firstName: user.firstName, lastName: user.lastName, phone: user.phone,
+  });
+  ok(res, { customer: { email: customer.email, firstName: customer.first_name,
+                        lastName: customer.last_name, phone: customer.phone } });
+}, { customer: true });
+
+route('GET', /^\/api\/me$/, async (req, res, m, url, user) => ok(res, {
+  user: { id: user.userId, email: user.email,
+          firstName: user.firstName, lastName: user.lastName, phone: user.phone },
+}), { customer: true });
+
+/* A shopper sees only their own orders. */
+route('GET', /^\/api\/me\/orders$/, async (req, res, m, url, user) => {
+  if (!DB.getCustomerOrders) return bad(res, 'Order history needs DB_DRIVER=supabase', 501);
+  const orders = await DB.getCustomerOrders(user.userId);
+  ok(res, { orders: orders.map(o => ({
+    ref: o.ref, status: o.status, total: o.total,
+    placedAt: o.created_at, city: o.city,
+    items: (o.items || []).map(i => ({ name: i.name, qty: i.qty, finish: i.finish,
+                                       slug: i.slug, lineTotal: i.line_total })),
+  })) });
+}, { customer: true });
+
+route('GET', /^\/api\/admin\/admins$/, async (req, res) =>
+  ok(res, { admins: await DB.listAdmins() }), { auth: true });
+
+route('POST', /^\/api\/admin\/admins$/, async (req, res) => {
+  const { email, name, role } = await readBody(req);
+  if (!isEmail(email)) return bad(res, 'Invalid email address');
+  if (!DB.addAdmin) return bad(res, 'Admin management needs DB_DRIVER=supabase', 501);
+  ok(res, await DB.addAdmin({ email, name, role }));
+}, { auth: true });
 
 /* ----------------------------------------------------------- admin --- */
-route('GET', /^\/api\/admin\/stats$/, async (req, res) => ok(res, DB.stats()), { auth: true });
+route('GET', /^\/api\/admin\/stats$/, async (req, res) => ok(res, await DB.stats()), { auth: true });
 
 route('GET', /^\/api\/admin\/products$/, async (req, res) =>
-  ok(res, { products: DB.listProducts(true) }), { auth: true });
+  ok(res, { products: await DB.listProducts(true) }), { auth: true });
 
 route('POST', /^\/api\/admin\/products$/, async (req, res) => {
   const b = await readBody(req);
@@ -178,34 +270,34 @@ route('POST', /^\/api\/admin\/products$/, async (req, res) => {
   }
   if (Number(b.price) <= 0) return bad(res, 'Price must be above zero');
   if (Number(b.mrp) < Number(b.price)) return bad(res, 'MRP cannot be below the selling price');
-  ok(res, DB.upsertProduct({ ...b, price: Number(b.price), mrp: Number(b.mrp), stock: Number(b.stock ?? 25) }));
+  ok(res, await DB.upsertProduct({ ...b, price: Number(b.price), mrp: Number(b.mrp), stock: Number(b.stock ?? 25) }));
 }, { auth: true });
 
 route('DELETE', /^\/api\/admin\/products\/([\w-]+)$/, async (req, res, m) =>
-  DB.deleteProduct(m[1]) ? ok(res, { archived: true }) : bad(res, 'Not found', 404), { auth: true });
+  await DB.deleteProduct(m[1]) ? ok(res, { archived: true }) : bad(res, 'Not found', 404), { auth: true });
 
 route('GET', /^\/api\/admin\/orders$/, async (req, res, m, url) =>
-  ok(res, { orders: DB.listOrders({ status: url.searchParams.get('status'),
+  ok(res, { orders: await DB.listOrders({ status: url.searchParams.get('status'),
                                     q: url.searchParams.get('q') }) }), { auth: true });
 
 route('PATCH', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
   const { status } = await readBody(req);
   try {
-    const o = DB.setOrderStatus(m[1].toUpperCase(), status);
+    const o = await DB.setOrderStatus(m[1].toUpperCase(), status);
     return o ? ok(res, { ref: o.ref, status: o.status }) : bad(res, 'Order not found', 404);
   } catch (e) { return bad(res, e.message); }
 }, { auth: true });
 
 route('GET', /^\/api\/admin\/messages$/, async (req, res) =>
-  ok(res, { messages: DB.listMessages() }), { auth: true });
+  ok(res, { messages: await DB.listMessages() }), { auth: true });
 
 route('PATCH', /^\/api\/admin\/messages\/([\w-]+)$/, async (req, res, m) => {
   const { handled } = await readBody(req);
-  ok(res, DB.setMessageHandled(m[1], handled));
+  ok(res, await DB.setMessageHandled(m[1], handled));
 }, { auth: true });
 
 route('GET', /^\/api\/admin\/subscribers$/, async (req, res) =>
-  ok(res, { subscribers: DB.listSubscribers() }), { auth: true });
+  ok(res, { subscribers: await DB.listSubscribers() }), { auth: true });
 
 /* ====================================================== static host == */
 const MIME = {
@@ -268,9 +360,13 @@ const server = createServer(async (req, res) => {
     if (!m) continue;
 
     let user = null;
-    if (r.auth) {
-      user = requireAuth(req);
-      if (!user) return bad(res, 'Sign in required', 401);
+    if (r.auth || r.customer) {
+      const who = await resolveAuth(req);
+      if (!who) return bad(res, 'Sign in required', 401);
+      if (r.auth && !who.admin) {
+        return bad(res, 'This account is not an administrator', 403);
+      }
+      user = r.auth ? { ...who.user, admin: who.admin } : who.user;
     }
     try {
       return await r.handler(req, res, m, url, user);
@@ -285,7 +381,7 @@ const server = createServer(async (req, res) => {
 });
 
 /* ============================================================== boot == */
-const seeded = DB.seedIfEmpty();
+const seeded = await DB.seedIfEmpty();
 
 /* Hosts with an ephemeral filesystem lose the database on every restart.
    SEED_DEMO=1 refills it on boot so the dashboard is never empty. */
@@ -299,7 +395,7 @@ if (process.env.SEED_DEMO === '1') {
   }
 }
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   const line = '─'.repeat(56);
   console.log(`\n${line}`);
   console.log('  AURELLE — server running');
@@ -307,7 +403,8 @@ server.listen(PORT, () => {
   console.log(`  Storefront   http://localhost:${PORT}/`);
   console.log(`  Dashboard    http://localhost:${PORT}/admin/`);
   console.log(`  API health   http://localhost:${PORT}/api/health`);
-  console.log(`\n  Database     ${DB.DB_PATH}`);
+  console.log(`\n  Data store   ${DB.DB_DRIVER}  ${DB.DB_PATH}`);
+  console.log(`  Auth         ${AUTH_DRIVER}${AUTH_DRIVER === 'clerk' ? '  ' + (Clerk.frontendApi() || '') : ''}`);
   if (seeded.products) console.log(`  Seeded       ${seeded.products} products`);
   if (demoSeeded && demoSeeded.orders) console.log(`  Demo data    ${demoSeeded.orders} orders`);
   const a = seeded.admin;
@@ -330,7 +427,7 @@ server.listen(PORT, () => {
       console.log(`     Set both ADMIN_EMAIL and ADMIN_PASSWORD together.`);
       if (a.usingDefaults) console.log(`     Currently running with no admin account at all.`);
     } else {
-      console.log(`  Admin accounts: ${DB.listAdmins().map(x => x.email).join(', ')}`);
+      console.log(`  Admin accounts: ${await DB.listAdmins().map(x => x.email).join(', ')}`);
       console.log(`  Set ADMIN_EMAIL and ADMIN_PASSWORD to change the password.`);
     }
   }

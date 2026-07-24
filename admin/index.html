@@ -16,24 +16,9 @@
 <div class="login-wrap" id="loginView">
   <form class="login-card" id="loginForm" novalidate>
     <span class="wordmark">Aurelle<small>FINE FASHION JEWELLERY</small></span>
-    <h1>Store dashboard</h1>
-
-    <div class="field">
-      <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="username" required>
-    </div>
-    <div class="field">
-      <label for="password">Password</label>
-      <input id="password" type="password" autocomplete="current-password" required>
-    </div>
-
-    <div id="loginError" style="display:none;color:var(--red-500);font-size:var(--fs-xs);margin-bottom:var(--space-4)"></div>
-
-    <button class="btn btn--primary btn--block" type="submit" id="loginBtn">Sign in</button>
-
-    <div class="login-hint">
-      First run seeds an account: <code>admin@aurelle.local</code> / <code>aurelle-admin</code>.
-      Set <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code> before deploying anywhere public.
+    <div id="loginPanel">
+      <h1>Store dashboard</h1>
+      <p style="text-align:center;color:var(--text-muted);font-size:var(--fs-sm)">Loading…</p>
     </div>
   </form>
 </div>
