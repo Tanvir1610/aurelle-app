@@ -212,12 +212,20 @@ route('GET', /^\/api\/auth\/me$/, async (req, res, m, url, user) =>
 
 /* -------------------------------------------------- customer area --- */
 /* What the browser needs to boot Clerk. Publishable key only. */
-route('GET', /^\/api\/config$/, async (req, res) => ok(res, {
-  auth: AUTH_DRIVER,
-  clerk: Clerk.publicConfig(),
-  db: DB.DB_DRIVER,
-  freeShippingAt: 999,
-}));
+route('GET', /^\/api\/config$/, async (req, res) => {
+  /* adminCount lets the dashboard say "no administrators are configured"
+     instead of a bare 403. It is a count only — never the addresses. */
+  let adminCount = null;
+  try { adminCount = (await DB.listAdmins()).length; } catch (e) { /* driver may be down */ }
+
+  ok(res, {
+    auth: AUTH_DRIVER,
+    clerk: Clerk.publicConfig(),
+    db: DB.DB_DRIVER,
+    adminCount,
+    freeShippingAt: 999,
+  });
+});
 
 /* Called once after Clerk sign-in so the shop keeps its own customer row. */
 route('POST', /^\/api\/me\/sync$/, async (req, res, m, url, user) => {
@@ -308,14 +316,38 @@ const MIME = {
   '.json': 'application/json', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
 };
 
-async function serveStatic(req, res, pathname) {
+async function serveStatic(req, res, pathname, search = '') {
   let rel = decodeURIComponent(pathname);
+
+  const contained = p => p === ROOT || p.startsWith(ROOT + sep);
+
+  /* A directory requested without a trailing slash, e.g. /admin.
+     Redirect to /admin/ rather than serving the index directly: the page
+     references admin.css and admin.js relatively, and without the slash the
+     browser resolves those against the parent and they 404.
+
+     Clerk sends people back here after sign-in without the slash, which is
+     how this surfaced. The query string carries Clerk's handshake token, so
+     it must survive the redirect. */
+  if (!rel.endsWith('/') && !extname(rel)) {
+    const asDir = resolve(ROOT, '.' + normalize(rel));
+    if (contained(asDir)) {
+      try {
+        const st = await stat(asDir);
+        if (st.isDirectory()) {
+          res.writeHead(301, { location: `${pathname}/${search}` });
+          return res.end();
+        }
+      } catch { /* not a directory — fall through to the .html lookup */ }
+    }
+  }
+
   if (rel.endsWith('/')) rel += 'index.html';
   if (!extname(rel)) rel += '.html';
 
   // Contain everything under ROOT — no path traversal.
   const target = resolve(ROOT, '.' + normalize(rel));
-  if (target !== ROOT && !target.startsWith(ROOT + sep)) {
+  if (!contained(target)) {
     res.writeHead(403).end('Forbidden');
     return;
   }
@@ -332,7 +364,13 @@ async function serveStatic(req, res, pathname) {
     res.end(buf);
   } catch {
     res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-    res.end('<h1>404</h1><p><a href="/">Back to the storefront</a></p>');
+    res.end(`<!doctype html><meta charset="utf-8">
+<title>Not found — Aurelle</title>
+<style>body{font-family:system-ui,sans-serif;max-width:34rem;margin:18vh auto;padding:0 1.5rem;
+color:#1a1512;line-height:1.6}h1{font-size:2rem;margin:0 0 .5rem}a{color:#9c7a44}</style>
+<h1>Page not found</h1>
+<p>Nothing lives at <code>${pathname.replace(/[<>&"]/g, '')}</code>.</p>
+<p><a href="/">Storefront</a> &middot; <a href="/admin/">Dashboard</a></p>`);
   }
 }
 
@@ -377,7 +415,7 @@ const server = createServer(async (req, res) => {
   }
 
   if (pathname.startsWith('/api/')) return bad(res, 'No such endpoint', 404);
-  return serveStatic(req, res, pathname);
+  return serveStatic(req, res, pathname, url.search);
 });
 
 /* ============================================================== boot == */
@@ -422,6 +460,10 @@ server.listen(PORT, async () => {
     } else if (a.mode === 'updated') {
       console.log(`  Admin password updated for ${a.email}`);
       if (a.removedDefault) console.log(`  Default admin@aurelle.local removed.`);
+    } else if (a.mode === 'none') {
+      console.log(`  !! No administrators configured.`);
+      console.log(`     Set ADMIN_EMAIL to the address you sign into Clerk with,`);
+      console.log(`     then restart. Nobody can open /admin/ until you do.`);
     } else if (a.mode === 'incomplete') {
       console.log(`  !! ${a.missing} is not set, so the admin account was NOT changed.`);
       console.log(`     Set both ADMIN_EMAIL and ADMIN_PASSWORD together.`);

@@ -189,6 +189,28 @@ console.log('\n── Clerk mode: adding a second administrator ───');
   t('a restart keeps both', DB.listAdmins().length === 2);
 }
 
+console.log('\n── Clerk on, but no ADMIN_EMAIL ────────────────');
+{
+  // Seeding the local default here would create an account nobody can ever
+  // sign into, while making the shop look like it has an administrator.
+  reset();
+  setDriver('clerk');
+  setEnv(null, null);
+
+  const r = DB.ensureAdmin();
+  t('the situation is reported as none', r.mode === 'none', JSON.stringify(r));
+  t('no phantom admin is created', DB.listAdmins().length === 0);
+  t('the published default is not seeded',
+     DB.isAdmin({ email: 'admin@aurelle.local' }) === null);
+
+  // Setting it later must work without wiping anything.
+  setEnv('vhoratanvir1610@gmail.com', null);
+  const r2 = DB.ensureAdmin();
+  t('setting it afterwards creates the admin', r2.mode === 'created');
+  t('and that account can now be found',
+     !!DB.isAdmin({ email: 'vhoratanvir1610@gmail.com' }));
+}
+
 console.log('\n── the manual reset tool ───────────────────────');
 {
   setDriver(null);

@@ -242,5 +242,45 @@ console.log('\n── static hosting & safety ───────────�
   t('path traversal is blocked', r.status === 403 || r.status === 404, `got ${r.status}`);
 }
 
+console.log('\n── directory routing ───────────────────────────');
+{
+  // Clerk returns from sign-in to /admin with no trailing slash. That used
+  // to 404, because a path with no extension had ".html" appended.
+  const r = await fetch(BASE + '/admin', { redirect: 'manual' });
+  t('/admin redirects to /admin/', r.status === 301, `got ${r.status}`);
+  t('the redirect target is canonical',
+     r.headers.get('location') === '/admin/', r.headers.get('location'));
+}
+{
+  // The query string carries Clerk's handshake token — losing it breaks sign-in.
+  const r = await fetch(BASE + '/admin?__clerk_db_jwt=dvb_abc123', { redirect: 'manual' });
+  t('the query string survives the redirect',
+     r.headers.get('location') === '/admin/?__clerk_db_jwt=dvb_abc123',
+     r.headers.get('location'));
+}
+{
+  const r = await fetch(BASE + '/admin?__clerk_db_jwt=dvb_abc123');
+  const html = await r.text();
+  t('following the redirect reaches the dashboard', r.status === 200);
+  t('and it is the real dashboard markup', html.includes('loginPanel'));
+}
+{
+  const r = await fetch(BASE + '/admin/');
+  t('the canonical path still serves directly', r.status === 200);
+}
+{
+  const r = await fetch(BASE + '/does-not-exist');
+  t('a genuine miss is still 404', r.status === 404);
+  const body = await r.text();
+  t('the 404 offers a way out', /storefront/i.test(body) && /dashboard/i.test(body));
+}
+{
+  // A directory redirect must not become an open redirect.
+  const r = await fetch(BASE + '//evil.example.com', { redirect: 'manual' });
+  const loc = r.headers.get('location');
+  t('no redirect to an external host',
+     !loc || (!loc.startsWith('http') && !loc.startsWith('//')), String(loc));
+}
+
 console.log(`\n${pass + fail} assertions · ${pass} passed · ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

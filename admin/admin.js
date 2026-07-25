@@ -130,17 +130,23 @@
 
   /** Signed in with Clerk, but not on the admin allow-list. */
   function showDenied(who) {
+    const noneConfigured = cfg.adminCount === 0;
     $('#appView').hidden = true;
     $('#loginView').hidden = false;
     $('#loginPanel').innerHTML = `
-      <h1>Not an administrator</h1>
+      <h1>${noneConfigured ? 'No administrators configured' : 'Not an administrator'}</h1>
       <p style="font-size:var(--fs-sm);color:var(--text-secondary);line-height:var(--lh-relaxed)">
-        <strong>${who}</strong> signed in successfully, but is not on the admin
-        list for this shop.
+        <strong>${who}</strong> signed in successfully, but ${noneConfigured
+          ? 'this shop has no administrator accounts at all.'
+          : 'is not on the admin list for this shop.'}
       </p>
       <div class="login-hint" style="margin-top:var(--space-5)">
-        Add this address to <code>aurelle_admins</code> in Supabase, or set
-        <code>ADMIN_EMAIL</code> to it and restart the server.
+        ${noneConfigured
+          ? `Set <code>ADMIN_EMAIL</code> on the server to the address you just
+             signed in with, then restart. It is applied on every boot.`
+          : `The server's <code>ADMIN_EMAIL</code> is set to a different address.
+             Change it to this one and restart, or add this address to the
+             admin list.`}
       </div>
       <button class="btn btn--ghost btn--block" type="button" id="denyOut"
               style="margin-top:var(--space-5)">Sign out</button>`;
@@ -233,39 +239,120 @@
 
   /* ---------------------------------------------------- overview -- */
   function renderStats(s) {
+    /* Compare the last 7 days against the 7 before, so the KPIs say
+       whether things are moving rather than just where they stand. */
+    const days = s.daily || [];
+    const last7 = days.slice(-7).reduce((a, d) => a + Number(d.revenue), 0);
+    const prev7 = days.slice(-14, -7).reduce((a, d) => a + Number(d.revenue), 0);
+    const delta = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : null;
+
+    const trend = (pct) => {
+      if (pct === null) return `<span class="kpi__trend kpi__trend--flat">no earlier data</span>`;
+      const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+      const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '—';
+      return `<span class="kpi__trend kpi__trend--${dir}">${arrow} ${Math.abs(pct)}% vs previous week</span>`;
+    };
+
     $('#kpis').innerHTML = `
-      <div class="kpi"><span>Revenue</span><strong>${inr(s.revenue)}</strong><em>${s.orders} orders all time</em></div>
-      <div class="kpi"><span>Average order</span><strong>${inr(s.aov)}</strong><em>Across every order</em></div>
-      <div class="kpi"><span>Needs action</span><strong>${s.pending}</strong><em>Placed or packed</em></div>
-      <div class="kpi"><span>Live products</span><strong>${s.products}</strong><em>${s.subscribers} subscribers</em></div>`;
+      <div class="kpi"><span>Revenue</span><strong>${inr(s.revenue)}</strong>
+        ${trend(delta)}</div>
+      <div class="kpi kpi--info"><span>Average order</span><strong>${inr(s.aov)}</strong>
+        <em>${s.orders} orders all time</em></div>
+      <div class="kpi ${s.pending > 0 ? 'kpi--warn' : 'kpi--good'}"><span>Needs action</span>
+        <strong>${s.pending}</strong><em>placed or packed</em></div>
+      <div class="kpi kpi--good"><span>Customers</span><strong>${s.customers ?? 0}</strong>
+        <em>${s.subscribers} on the mailing list</em></div>`;
 
     if (s.pending > 0) { $('#pillOrders').hidden = false; $('#pillOrders').textContent = s.pending; }
     else $('#pillOrders').hidden = true;
     if (s.unread > 0) { $('#pillMsgs').hidden = false; $('#pillMsgs').textContent = s.unread; }
     else $('#pillMsgs').hidden = true;
 
-    const peak = Math.max(1, ...s.daily.map(d => d.revenue));
-    $('#chart').innerHTML = s.daily.length
-      ? s.daily.map(d => {
+    /* revenue chart */
+    const peak = Math.max(1, ...days.map(d => Number(d.revenue)));
+    $('#chart').innerHTML = days.length
+      ? days.map(d => {
           const day = d.day.slice(8) + '/' + d.day.slice(5, 7);
-          return `<div class="chart__bar" style="height:${Math.max(3, (d.revenue / peak) * 100)}%"
+          return `<div class="chart__bar" style="height:${Math.max(3, (Number(d.revenue) / peak) * 100)}%"
                        data-label="${day}"><span>${inr(d.revenue)} · ${d.orders} orders</span></div>`;
         }).join('')
       : `<p class="tbl__sub">No orders yet. Place one on the storefront and it appears here.</p>`;
 
-    $('#topProducts').innerHTML = s.topProducts.length
-      ? s.topProducts.map(p => `<tr>
-          <td><span class="tbl__name">${esc(p.name)}</span></td>
-          <td class="num">${p.units} sold</td>
-          <td class="num">${inr(p.revenue)}</td></tr>`).join('')
+    /* order status funnel */
+    const byStatus = {};
+    (s.byStatus || []).forEach(x => { byStatus[x.status] = Number(x.n); });
+    const maxN = Math.max(1, ...Object.values(byStatus));
+    const ORDER = ['placed', 'packed', 'shipped', 'delivered', 'cancelled'];
+    $('#funnel').innerHTML = ORDER.map(st => {
+      const n = byStatus[st] || 0;
+      return `<div class="funnel__row">
+        <span class="funnel__label">${st}</span>
+        <div class="funnel__bar"><div class="funnel__fill funnel__fill--${st}"
+             style="width:${(n / maxN) * 100}%"></div></div>
+        <span class="funnel__n">${n}</span>
+      </div>`;
+    }).join('');
+
+    /* best sellers with a mini bar for share of units */
+    const top = s.topProducts || [];
+    const topMax = Math.max(1, ...top.map(p => Number(p.units)));
+    $('#topProducts').innerHTML = top.length
+      ? top.map(p => `<tr>
+          <td><span class="tbl__name">${esc(p.name)}</span>
+            <div class="tbl__sub">${inr(p.revenue)} revenue</div></td>
+          <td style="width:110px"><div class="funnel__bar" style="height:8px">
+            <div class="funnel__fill funnel__fill--delivered"
+                 style="width:${(Number(p.units) / topMax) * 100}%"></div></div></td>
+          <td class="num">${p.units}</td></tr>`).join('')
       : `<tr><td class="tbl__sub">Nothing sold yet.</td></tr>`;
 
-    $('#lowStock').innerHTML = s.lowStock.length
+    /* low stock */
+    $('#lowStock').innerHTML = (s.lowStock || []).length
       ? s.lowStock.map(p => `<tr>
           <td><span class="tbl__name">${esc(p.name)}</span></td>
           <td class="num"><span class="tag ${p.stock <= 3 ? 'tag--low' : 'tag--ok'}">${p.stock} left</span></td>
+          <td class="num"><button class="link-btn" data-edit="${esc(p.slug)}">Restock</button></td>
           </tr>`).join('')
       : `<tr><td class="tbl__sub">Every product is above ten units.</td></tr>`;
+
+    renderFeed();
+  }
+
+  /** Recent activity, assembled from orders and messages already in cache. */
+  function renderFeed() {
+    const host = $('#feed');
+    if (!host) return;
+
+    const events = [];
+    cache.orders.slice(0, 6).forEach(o => events.push({
+      at: o.created_at, icon: 'bag',
+      title: `${o.first_name} ${o.last_name} ordered ${inr(o.total)}`,
+      sub: `${o.ref} · ${o.items.length} item${o.items.length === 1 ? '' : 's'} · ${o.city}`,
+    }));
+    cache.messages.slice(0, 4).forEach(m => events.push({
+      at: m.created_at, icon: 'mail',
+      title: `${m.name} sent an enquiry`,
+      sub: m.subject || 'General',
+    }));
+
+    events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
+    const ICONS = {
+      bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/>',
+      mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
+    };
+
+    host.innerHTML = events.length
+      ? `<div class="feed">${events.slice(0, 8).map(e => `
+          <div class="feed__item">
+            <span class="feed__dot"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.6">${ICONS[e.icon]}</svg></span>
+            <div class="feed__body">
+              <strong>${esc(e.title)}</strong>
+              <div>${esc(e.sub)} · ${when(e.at)}</div>
+            </div>
+          </div>`).join('')}</div>`
+      : `<p class="tbl__sub">Nothing has happened yet.</p>`;
   }
 
   /* ------------------------------------------------------ orders -- */
@@ -465,9 +552,9 @@
 
   /* -------------------------------------------------------- load -- */
   async function loadStats()    { renderStats(await api('/api/admin/stats')); }
-  async function loadOrders()   { cache.orders = (await api('/api/admin/orders')).orders; renderOrders(); }
+  async function loadOrders()   { cache.orders = (await api('/api/admin/orders')).orders; renderOrders(); renderFeed(); }
   async function loadProducts() { cache.products = (await api('/api/admin/products')).products; renderProducts(); }
-  async function loadMessages() { cache.messages = (await api('/api/admin/messages')).messages; renderMessages(); }
+  async function loadMessages() { cache.messages = (await api('/api/admin/messages')).messages; renderMessages(); renderFeed(); }
   async function loadSubs()     { cache.subs = (await api('/api/admin/subscribers')).subscribers; renderSubs(); }
 
   async function loadAll() {

@@ -209,6 +209,14 @@ export function ensureAdmin() {
              removedDefault: removed > 0, driver: 'clerk' };
   }
 
+  /* Clerk is on but no ADMIN_EMAIL is set. Seeding the local default here
+     would be worse than useless: nobody owns admin@aurelle.local in Clerk,
+     so it can never sign in, yet its presence makes the shop look like it
+     has an administrator. Report the truth instead. */
+  if (usingClerk && !email) {
+    return { mode: 'none', driver: 'clerk' };
+  }
+
   // Only one half supplied — tell them rather than half-applying it.
   if ((email && !pass) || (!email && pass)) {
     return { mode: 'incomplete',
