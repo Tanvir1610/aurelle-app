@@ -17,7 +17,20 @@
   let clerkError = null;            // why it failed, if it did
   let pendingSignIn = false;        // user clicked before Clerk was ready
   let cache = { products: [], orders: [], messages: [], subs: [],
-                customers: [], guests: [], admins: [] };
+                customers: [], guests: [], admins: [], images: [] };
+
+  /* Editor working state — the piece currently open in the modal. */
+  let draft = { img: null, imgAlt: null, occasion: [], swatches: [] };
+
+  const OCCASIONS = ['Everyday', 'Office', 'Wedding', 'Festive', 'Gifting'];
+  const FINISHES = [
+    { key: 'gold',    color: '#b8935a', label: 'Gold' },
+    { key: 'rose',    color: '#c08a82', label: 'Rose Gold' },
+    { key: 'silver',  color: '#e6e2dc', label: 'Silver' },
+    { key: 'pearl',   color: '#f0e9dd', label: 'Pearl' },
+    { key: 'emerald', color: '#2f5d4e', label: 'Emerald' },
+    { key: 'ruby',    color: '#8e2a3b', label: 'Ruby' },
+  ];
 
   try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) { token = null; }
 
@@ -418,7 +431,11 @@
       <tr>
         <td><img class="tbl__thumb" src="../${esc(p.img)}" alt=""></td>
         <td><span class="tbl__name">${esc(p.name)}</span><div class="tbl__sub">${esc(p.slug)}</div></td>
-        <td class="tbl__sub">${esc(p.cat)}<br>${esc(p.metal)}</td>
+        <td class="tbl__sub">${esc(p.cat)}<br>${esc(p.metal)}
+          <div style="margin-top:4px">${(p.swatches || []).map(sw =>
+            `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;
+              background:${sw.color};border:1px solid rgba(0,0,0,.12);margin-right:3px"></i>`).join('')}</div>
+          <div style="margin-top:2px">${(p.occasion || []).join(', ')}</div></td>
         <td class="num">${inr(p.price)}</td>
         <td class="num tbl__sub">${inr(p.mrp)}</td>
         <td class="num"><span class="tag ${p.stock <= 10 ? 'tag--low' : 'tag--ok'}">${p.stock}</span></td>
@@ -433,9 +450,103 @@
   $('#productSearch').addEventListener('input', renderProducts);
 
   const scrim = $('#productScrim');
+
+  /* ------------------------------------------- editor rendering -- */
+  function renderImagePicker() {
+    const host = $('#imgGrid');
+    if (!cache.images.length) {
+      host.innerHTML = '<p class="tbl__sub">Loading artwork…</p>';
+      return;
+    }
+    host.innerHTML = cache.images.map(im => `
+      <button type="button" class="img-opt ${draft.img === im.file ? 'is-active' : ''}"
+              data-img="${esc(im.file)}" data-alt="${esc(im.alt)}" title="${esc(im.label)}">
+        <img src="../${esc(im.file)}" alt="${esc(im.label)}" loading="lazy">
+      </button>`).join('');
+  }
+
+  function renderOccasions() {
+    $('#occRow').innerHTML = OCCASIONS.map(o => `
+      <button type="button" class="chip-toggle" data-occ="${o}"
+              aria-pressed="${draft.occasion.includes(o)}">${o}</button>`).join('');
+  }
+
+  function renderFinishes() {
+    $('#swatchRow').innerHTML = FINISHES.map(f => `
+      <button type="button" class="swatch-toggle" data-finish="${f.key}"
+              aria-pressed="${draft.swatches.some(s => s.key === f.key)}">
+        <i style="background:${f.color}"></i>${f.label}</button>`).join('');
+  }
+
+  /** Live card preview, so the admin sees the shop's view while editing. */
+  function renderPreview() {
+    const price = Number($('#pPrice').value) || 0;
+    const mrp = Number($('#pMrp').value) || 0;
+    const badge = $('#pBadge').value;
+
+    $('#pvImg').src = draft.img ? '../' + draft.img : '';
+    $('#pvCat').textContent = $('#pCat').value;
+    $('#pvName').textContent = $('#pName').value || 'Piece name';
+    $('#pvPrice').textContent = inr(price);
+    $('#pvMrp').textContent = mrp > price ? inr(mrp) : '';
+    $('#pvOff').textContent = mrp > price ? Math.round(((mrp - price) / mrp) * 100) + '% off' : '';
+    $('#pvBadge').hidden = !badge;
+    $('#pvBadge').textContent = badge;
+    $('#pvDots').innerHTML = draft.swatches
+      .map(sw => `<i style="background:${sw.color}"></i>`).join('');
+  }
+
+  /* Any edit refreshes the preview. */
+  ['#pName', '#pCat', '#pPrice', '#pMrp', '#pBadge'].forEach(sel => {
+    const el = $(sel);
+    el.addEventListener('input', renderPreview);
+    el.addEventListener('change', renderPreview);
+  });
+
+  /* Typing a name suggests a slug, until the admin edits the slug themselves. */
+  let slugTouched = false;
+  $('#pSlug').addEventListener('input', () => { slugTouched = true; });
+  $('#pName').addEventListener('input', () => {
+    if (slugTouched || $('#pSlug').readOnly) return;
+    $('#pSlug').value = $('#pName').value.toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  });
+
+  $('#imgGrid').addEventListener('click', e => {
+    const b = e.target.closest('[data-img]');
+    if (!b) return;
+    draft.img = b.dataset.img;
+    draft.imgAlt = b.dataset.alt;
+    renderImagePicker();
+    renderPreview();
+  });
+
+  $('#occRow').addEventListener('click', e => {
+    const b = e.target.closest('[data-occ]');
+    if (!b) return;
+    const o = b.dataset.occ;
+    draft.occasion = draft.occasion.includes(o)
+      ? draft.occasion.filter(x => x !== o)
+      : [...draft.occasion, o];
+    renderOccasions();
+  });
+
+  $('#swatchRow').addEventListener('click', e => {
+    const b = e.target.closest('[data-finish]');
+    if (!b) return;
+    const f = FINISHES.find(x => x.key === b.dataset.finish);
+    draft.swatches = draft.swatches.some(s => s.key === f.key)
+      ? draft.swatches.filter(s => s.key !== f.key)
+      : [...draft.swatches, f];
+    renderFinishes();
+    renderPreview();
+  });
+
   function openProduct(slug) {
     const p = slug ? cache.products.find(x => x.slug === slug) : null;
-    $('#productModalTitle').textContent = p ? 'Edit product' : 'Add product';
+    slugTouched = !!p;
+
+    $('#productModalTitle').textContent = p ? `Edit ${p.name}` : 'Add a jewellery piece';
     $('#pSlug').value = p ? p.slug : '';
     $('#pSlug').readOnly = !!p;
     $('#pName').value = p ? p.name : '';
@@ -446,16 +557,30 @@
     $('#pStock').value = p ? p.stock : 25;
     $('#pBadge').value = p && p.badge ? p.badge : '';
     $('#pBlurb').value = p ? (p.blurb || '') : '';
+
+    draft.img = p ? p.img : (cache.images[0] ? cache.images[0].file : null);
+    draft.imgAlt = p ? p.imgAlt : (cache.images[0] ? cache.images[0].alt : null);
+    draft.occasion = p && p.occasion.length ? [...p.occasion] : ['Everyday'];
+    draft.swatches = p && p.swatches.length ? [...p.swatches] : [FINISHES[0]];
+
     $('#productError').style.display = 'none';
     $$('.field--error', scrim).forEach(f => f.classList.remove('field--error'));
+
+    renderImagePicker();
+    renderOccasions();
+    renderFinishes();
+    renderPreview();
     scrim.classList.add('is-open');
   }
+
   const closeProduct = () => scrim.classList.remove('is-open');
 
   $('#newProductBtn').addEventListener('click', () => openProduct(null));
   $('#cancelProduct').addEventListener('click', closeProduct);
   scrim.addEventListener('click', e => { if (e.target === scrim) closeProduct(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeProduct(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && scrim.classList.contains('is-open')) closeProduct();
+  });
 
   $('#productsBody').addEventListener('click', async (e) => {
     const edit = e.target.closest('[data-edit]');
@@ -464,12 +589,21 @@
     const arch = e.target.closest('[data-archive]');
     if (arch) {
       const p = cache.products.find(x => x.slug === arch.dataset.archive);
-      if (!confirm(`Archive "${p ? p.name : arch.dataset.archive}"? It will disappear from the storefront.`)) return;
+      if (!confirm(`Archive "${p ? p.name : arch.dataset.archive}"? It disappears from the storefront.`)) return;
       try {
         await api(`/api/admin/products/${arch.dataset.archive}`, { method: 'DELETE' });
         await loadProducts();
         loadStats();
       } catch (err) { alert(err.message); }
+    }
+  });
+
+  // Low-stock "Restock" buttons on the overview open the same editor.
+  $('#lowStock').addEventListener('click', e => {
+    const b = e.target.closest('[data-edit]');
+    if (b) {
+      document.querySelector('.side nav button[data-view="products"]').click();
+      openProduct(b.dataset.edit);
     }
   });
 
@@ -488,14 +622,28 @@
       stock: Number($('#pStock').value),
       badge: $('#pBadge').value || null,
       blurb: $('#pBlurb').value.trim(),
+      img: draft.img,
+      imgAlt: draft.imgAlt,
+      occasion: draft.occasion,
+      swatches: draft.swatches,
     };
 
     let ok = true;
-    const flag = (id, bad) => { $(id).closest('.field').classList.toggle('field--error', bad); if (bad) ok = false; };
+    const flag = (sel, bad) => {
+      const field = $(sel).closest('.field');
+      if (field) field.classList.toggle('field--error', bad);
+      if (bad) ok = false;
+    };
     flag('#pSlug', !/^[a-z0-9-]+$/.test(body.slug));
     flag('#pName', !body.name);
     flag('#pPrice', !(body.price > 0));
     flag('#pMrp', !(body.mrp >= body.price));
+
+    // These live outside .field wrappers, so flag their containers directly.
+    $('#occRow').closest('.field').classList.toggle('field--error', !body.occasion.length);
+    $('#swatchRow').closest('.field').classList.toggle('field--error', !body.swatches.length);
+    if (!body.occasion.length || !body.swatches.length) ok = false;
+
     if (!ok) return;
 
     try {
@@ -509,37 +657,7 @@
     }
   });
 
-  /* ---------------------------------------------------- messages -- */
-  function renderMessages() {
-    $('#messagesBody').innerHTML = cache.messages.length ? cache.messages.map(m => `
-      <div class="msg${m.handled ? ' is-handled' : ''}">
-        <div class="msg__head">
-          <strong>${esc(m.name)}</strong>
-          <span>${esc(m.email)}</span>
-          ${m.order_ref ? `<span class="tag tag--placed">${esc(m.order_ref)}</span>` : ''}
-          <span>${esc(m.subject || 'General')}</span>
-          <span style="margin-left:auto">${when(m.created_at)}</span>
-          <button class="link-btn" data-handled="${esc(m.id)}" data-to="${m.handled ? 0 : 1}">
-            ${m.handled ? 'Reopen' : 'Mark handled'}</button>
-        </div>
-        <p class="msg__body">${esc(m.body)}</p>
-      </div>`).join('')
-      : `<div class="state"><h3>No messages</h3><p>Enquiries from the contact form land here.</p></div>`;
-  }
-
-  $('#messagesBody').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-handled]');
-    if (!b) return;
-    try {
-      await api(`/api/admin/messages/${b.dataset.handled}`, {
-        method: 'PATCH', body: { handled: b.dataset.to === '1' },
-      });
-      await loadMessages();
-      loadStats();
-    } catch (err) { alert(err.message); }
-  });
-
-  /* ---------------------------------------------------- customers -- */
+  /* ---------------------------------------------------- customers -- */  /* ---------------------------------------------------- customers -- */
   function renderCustomers() {
     const q = $('#customerSearch').value.toLowerCase();
     const type = $('#customerType').value;
@@ -746,6 +864,10 @@
   async function loadStats()    { renderStats(await api('/api/admin/stats')); }
   async function loadOrders()   { cache.orders = (await api('/api/admin/orders')).orders; renderOrders(); renderFeed(); }
   async function loadProducts() { cache.products = (await api('/api/admin/products')).products; renderProducts(); }
+  async function loadImages() {
+    try { cache.images = (await api('/api/admin/images')).images || []; }
+    catch (e) { cache.images = []; }
+  }
   async function loadMessages() { cache.messages = (await api('/api/admin/messages')).messages; renderMessages(); renderFeed(); }
   async function loadSubs()     { cache.subs = (await api('/api/admin/subscribers')).subscribers; renderSubs(); }
   async function loadCustomers() {
@@ -758,7 +880,7 @@
   async function loadAll() {
     try {
       await Promise.all([loadStats(), loadOrders(), loadProducts(), loadMessages(),
-                         loadSubs(), loadCustomers(), loadAdmins()]);
+                         loadSubs(), loadCustomers(), loadAdmins(), loadImages()]);
     } catch (e) {
       console.error(e);
       if (token) alert(`Could not load dashboard data: ${e.message}`);

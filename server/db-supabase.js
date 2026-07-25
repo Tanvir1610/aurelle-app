@@ -124,9 +124,8 @@ export async function upsertProduct(p) {
   };
   const existing = await getProduct(p.slug, true);
   if (existing) {
-    // Preserve the artwork already attached to the product.
-    delete row.img;
-    delete row.img_alt;
+    // Keep existing artwork unless the editor sent a replacement.
+    if (!p.img) { delete row.img; delete row.img_alt; }
     await rest(`/${T.products}?slug=eq.${encodeURIComponent(p.slug)}`,
                { method: 'PATCH', body: row, prefer: 'return=minimal' });
   } else {

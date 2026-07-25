@@ -368,6 +368,12 @@ export function upsertProduct(p) {
   const occ = JSON.stringify(p.occasion || ['Everyday']);
   const sw  = JSON.stringify(p.swatches || [{ key: 'gold', color: '#b8935a', label: 'Gold' }]);
   if (existing) {
+    /* Only overwrite artwork when the editor actually sent some, so a plain
+       price change never wipes the images already on the product. */
+    if (p.img) {
+      db.prepare('UPDATE products SET img = ?, img_alt = ? WHERE slug = ?')
+        .run(p.img, p.imgAlt || p.img, p.slug);
+    }
     db.prepare(`UPDATE products SET name=?, cat=?, price=?, mrp=?, metal=?, badge=?,
                 stock=?, blurb=?, occasion=?, swatches=?, active=? WHERE slug=?`)
       .run(p.name, p.cat, p.price, p.mrp, p.metal, p.badge || null,

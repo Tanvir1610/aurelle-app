@@ -296,6 +296,27 @@ route('PATCH', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
   } catch (e) { return bad(res, e.message); }
 }, { auth: true });
 
+/* Artwork the admin can assign to a product. */
+route('GET', /^\/api\/admin\/images$/, async (req, res) => {
+  const { readdir } = await import('node:fs/promises');
+  const dir = resolve(ROOT, 'assets/img');
+  let files = [];
+  try { files = await readdir(dir); } catch (e) { /* no art folder */ }
+
+  const products = files.filter(f => /^p-.*\.svg$/.test(f) && !f.includes('-alt'))
+    .sort()
+    .map(f => ({ file: `assets/img/${f}`,
+                 alt: `assets/img/${f.replace('.svg', '-alt.svg')}`,
+                 label: f.replace(/^p-|\.svg$/g, '').replace(/-/g, ' ') }));
+
+  const categories = files.filter(f => /^cat-.*\.svg$/.test(f))
+    .sort()
+    .map(f => ({ file: `assets/img/${f}`, alt: `assets/img/${f}`,
+                 label: f.replace(/^cat-|\.svg$/g, '').replace(/-/g, ' ') }));
+
+  ok(res, { images: [...products, ...categories] });
+}, { auth: true });
+
 route('GET', /^\/api\/admin\/customers$/, async (req, res) => {
   const [signedIn, guests] = await Promise.all([
     DB.listCustomers(), DB.listGuestBuyers(),

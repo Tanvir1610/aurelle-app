@@ -224,6 +224,59 @@ console.log('\n── admin API ────────────────
   t('admin reads subscribers', r.status === 200 && r.data.subscribers.length > 0);
 }
 
+console.log('\n── adding a jewellery piece ────────────────────');
+{
+  const lib = await call('GET', '/api/admin/images', { token });
+  t('an artwork library is offered', lib.status === 200 && lib.data.images.length > 0,
+     String(lib.data.images?.length));
+  t('each option carries a second angle',
+     lib.data.images[0].alt && lib.data.images[0].alt.includes('-alt'),
+     lib.data.images[0]?.alt);
+
+  const anon = await call('GET', '/api/admin/images');
+  t('the library needs an admin', anon.status === 401);
+
+  // A full jewellery piece, exactly as the editor submits it.
+  const piece = {
+    slug: 'zoya-ruby-choker', name: 'Zoya Ruby Choker', cat: 'Chokers', metal: 'Ruby',
+    price: 3100, mrp: 6200, stock: 12, badge: 'New', blurb: 'A high collar in deep red.',
+    img: 'assets/img/p-devi-temple-choker.svg',
+    imgAlt: 'assets/img/p-devi-temple-choker-alt.svg',
+    occasion: ['Wedding', 'Festive'],
+    swatches: [{ key: 'ruby', color: '#8e2a3b', label: 'Ruby' },
+               { key: 'gold', color: '#b8935a', label: 'Gold' }],
+  };
+  const made = await call('POST', '/api/admin/products', { token, body: piece });
+  t('the piece is created', made.status === 200 && made.data.slug === 'zoya-ruby-choker');
+  t('the chosen artwork is stored', made.data.img === piece.img, made.data.img);
+  t('both occasions are stored',
+     JSON.stringify(made.data.occasion) === JSON.stringify(['Wedding', 'Festive']),
+     JSON.stringify(made.data.occasion));
+  t('both finishes are stored', made.data.swatches.length === 2,
+     JSON.stringify(made.data.swatches));
+
+  const live = await call('GET', '/api/products/zoya-ruby-choker');
+  t('it is live on the storefront immediately', live.status === 200);
+  t('with the artwork the admin picked', live.data.img === piece.img);
+  t('and its finishes for the swatch dots', live.data.swatches.length === 2);
+}
+{
+  // Editing price must not silently wipe the artwork already chosen.
+  await call('POST', '/api/admin/products', {
+    token,
+    body: { slug: 'zoya-ruby-choker', name: 'Zoya Ruby Choker', cat: 'Chokers',
+            metal: 'Ruby', price: 2900, mrp: 6200, stock: 20,
+            occasion: ['Wedding'], swatches: [{ key: 'ruby', color: '#8e2a3b', label: 'Ruby' }] },
+  });
+  const after = await call('GET', '/api/products/zoya-ruby-choker');
+  t('a price edit applies', after.data.price === 2900);
+  t('and does not wipe the artwork',
+     after.data.img === 'assets/img/p-devi-temple-choker.svg', after.data.img);
+  t('occasions can be narrowed', after.data.occasion.length === 1);
+
+  await call('DELETE', '/api/admin/products/zoya-ruby-choker', { token });
+}
+
 console.log('\n── customers panel ─────────────────────────────');
 {
   const r = await call('GET', '/api/admin/customers', { token });

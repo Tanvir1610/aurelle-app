@@ -237,44 +237,103 @@
 
 <!-- PRODUCT EDITOR -->
 <div class="modal-scrim" id="productScrim">
-  <form class="modal" id="productForm" novalidate>
-    <h3 id="productModalTitle">Add product</h3>
-    <div class="field">
-      <label for="pSlug">Slug</label>
-      <input id="pSlug" required placeholder="rosevine-necklace-set">
-      <span class="field__err">Lowercase letters, numbers and hyphens only</span>
-    </div>
-    <div class="field"><label for="pName">Name</label><input id="pName" required><span class="field__err">Name is required</span></div>
-    <div class="field-row">
-      <div class="field"><label for="pCat">Category</label>
-        <select id="pCat">
-          <option>Necklace Sets</option><option>Earrings</option><option>Rings</option>
-          <option>Bracelets</option><option>Chokers</option><option>Pendants</option>
-          <option>Maang Tikka</option><option>Bangles</option>
-        </select>
+  <form class="modal modal--wide" id="productForm" novalidate>
+    <h3 id="productModalTitle">Add a jewellery piece</h3>
+
+    <div class="editor">
+      <div>
+        <div class="field-row">
+          <div class="field"><label for="pName">Piece name</label>
+            <input id="pName" required placeholder="Rosevine Necklace Set">
+            <span class="field__err">Name is required</span></div>
+          <div class="field"><label for="pSlug">URL slug</label>
+            <input id="pSlug" required placeholder="rosevine-necklace-set">
+            <span class="field__err">Lowercase letters, numbers and hyphens only</span></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field"><label for="pCat">Category</label>
+            <select id="pCat">
+              <option>Necklace Sets</option><option>Earrings</option><option>Rings</option>
+              <option>Bracelets</option><option>Chokers</option><option>Pendants</option>
+              <option>Maang Tikka</option><option>Bangles</option>
+            </select></div>
+          <div class="field"><label for="pMetal">Primary metal</label>
+            <select id="pMetal">
+              <option>Gold</option><option>Rose Gold</option><option>Silver</option>
+              <option>Pearl</option><option>Emerald</option><option>Ruby</option>
+            </select></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field"><label for="pPrice">Selling price (₹)</label>
+            <input id="pPrice" type="number" min="1" required placeholder="2400">
+            <span class="field__err">Must be above zero</span></div>
+          <div class="field"><label for="pMrp">MRP (₹)</label>
+            <input id="pMrp" type="number" min="1" required placeholder="4799">
+            <span class="field__err">Cannot be below the selling price</span></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field"><label for="pStock">Stock on hand</label>
+            <input id="pStock" type="number" min="0" value="25"></div>
+          <div class="field"><label for="pBadge">Badge</label>
+            <select id="pBadge">
+              <option value="">None</option><option>New</option><option>Bestseller</option>
+            </select></div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Artwork</span>
+          <div class="img-grid" id="imgGrid"></div>
+          <p class="tbl__sub" style="margin-top:var(--space-2)">
+            Pick the piece this most resembles. The matching second angle is used
+            automatically for the hover image.</p>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Worn for</span>
+          <div class="chip-row" id="occRow"></div>
+          <span class="field__err">Choose at least one occasion</span>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Available finishes</span>
+          <div class="swatch-row" id="swatchRow"></div>
+          <span class="field__err">Choose at least one finish</span>
+        </div>
+
+        <div class="field"><label for="pBlurb">Description</label>
+          <textarea id="pBlurb" style="min-height:80px"
+            placeholder="One or two lines on how it wears."></textarea></div>
       </div>
-      <div class="field"><label for="pMetal">Metal</label>
-        <select id="pMetal">
-          <option>Gold</option><option>Rose Gold</option><option>Silver</option>
-          <option>Pearl</option><option>Emerald</option><option>Ruby</option>
-        </select>
+
+      <div class="preview">
+        <span class="field-label">Storefront preview</span>
+        <div class="preview__frame">
+          <div class="preview__img">
+            <span class="preview__badge" id="pvBadge" hidden></span>
+            <img id="pvImg" alt="">
+          </div>
+          <div class="preview__body">
+            <div class="preview__cat" id="pvCat">Category</div>
+            <div class="preview__name" id="pvName">Piece name</div>
+            <div class="preview__price">
+              <span class="preview__now" id="pvPrice">₹0</span>
+              <span class="preview__was" id="pvMrp"></span>
+              <span class="preview__off" id="pvOff"></span>
+            </div>
+            <div class="preview__dots" id="pvDots"></div>
+          </div>
+        </div>
+        <p class="preview__note">This is how it appears in the shop.</p>
       </div>
     </div>
-    <div class="field-row">
-      <div class="field"><label for="pPrice">Price (₹)</label><input id="pPrice" type="number" min="1" required><span class="field__err">Must be above zero</span></div>
-      <div class="field"><label for="pMrp">MRP (₹)</label><input id="pMrp" type="number" min="1" required><span class="field__err">Cannot be below the price</span></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label for="pStock">Stock</label><input id="pStock" type="number" min="0" value="25"></div>
-      <div class="field"><label for="pBadge">Badge</label>
-        <select id="pBadge"><option value="">None</option><option>New</option><option>Bestseller</option></select>
-      </div>
-    </div>
-    <div class="field"><label for="pBlurb">Description</label><textarea id="pBlurb" style="min-height:90px"></textarea></div>
-    <div id="productError" style="display:none;color:var(--red-500);font-size:var(--fs-xs)"></div>
+
+    <div id="productError" style="display:none;color:var(--red-500);font-size:var(--fs-xs);margin-top:var(--space-4)"></div>
     <div class="modal__actions">
       <button class="btn btn--ghost btn--sm" type="button" id="cancelProduct">Cancel</button>
-      <button class="btn btn--gold btn--sm" type="submit">Save product</button>
+      <button class="btn btn--gold btn--sm" type="submit">Save piece</button>
     </div>
   </form>
 </div>
