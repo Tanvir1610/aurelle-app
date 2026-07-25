@@ -676,95 +676,196 @@
   /* ================================================== ACCOUNT ==== */
   function account() {
     const box = $('#accountBox');
+    let tab = 'orders';
+    let orders = [];
+    let loaded = false;
 
-    const money = n => inr(n);
     const when = iso => {
       if (!iso) return '';
-      const d = new Date(iso);
+      const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
       return isNaN(d) ? '' : d.toLocaleDateString('en-IN',
         { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
-    async function paintOrders() {
-      const host = $('#myOrders');
-      if (!host) return;
-      host.innerHTML = '<p class="muted">Loading your orders…</p>';
-      try {
-        const { orders } = await window.AU_API.myOrders();
-        host.innerHTML = orders.length ? orders.map(o => `
-          <div class="panel" style="margin-bottom:var(--space-4)">
-            <div style="display:flex;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap">
-              <div>
-                <p class="eyebrow">${esc(o.ref)}</p>
-                <strong style="font-family:var(--font-display);font-size:var(--fs-h5)">
-                  ${esc(o.status[0].toUpperCase() + o.status.slice(1))}</strong>
-                <div class="muted" style="font-size:var(--fs-xs)">
-                  ${when(o.placedAt)} · to ${esc(o.city)}</div>
-              </div>
-              <div style="text-align:right">
-                <strong>${money(o.total)}</strong>
-                <div class="muted" style="font-size:var(--fs-xs)">
-                  ${o.items.length} item${o.items.length === 1 ? '' : 's'}</div>
-              </div>
+    const STEPS = [
+      ['placed', 'Placed'], ['packed', 'Packed'],
+      ['shipped', 'Shipped'], ['delivered', 'Delivered'],
+    ];
+
+    function trackRail(status) {
+      if (status === 'cancelled') return '';
+      const at = STEPS.findIndex(s => s[0] === status);
+      return `<div class="track-rail">${STEPS.map(([key, label], i) => `
+        <div class="track-node ${i <= at ? 'is-done' : ''}">
+          <div class="track-node__dot">${i <= at ? window.AU.icon('check', 12) : ''}</div>
+          <span>${label}</span>
+        </div>`).join('')}</div>`;
+    }
+
+    function orderCard(o) {
+      return `<article class="order-card">
+        <div class="order-card__head">
+          <div>
+            <div class="order-card__ref">${esc(o.ref)}</div>
+            <span class="status-pill status-pill--${esc(o.status)}">${esc(o.status)}</span>
+            <div class="muted" style="font-size:var(--fs-xs);margin-top:var(--space-2)">
+              Placed ${when(o.placedAt)} · delivering to ${esc(o.city)}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="order-card__total">${inr(o.total)}</div>
+            <div class="muted" style="font-size:var(--fs-xs)">
+              ${o.items.length} item${o.items.length === 1 ? '' : 's'}</div>
+          </div>
+        </div>
+        ${trackRail(o.status)}
+        <div class="order-card__items">
+          ${o.items.map(i => `<div class="order-line">
+            ${M.img(`assets/img/p-${i.slug}.svg`, i.name, { width: 52 })}
+            <div>
+              <div class="order-line__name">${esc(i.name)}</div>
+              <div class="order-line__meta">${esc(i.finish || '')} · Qty ${i.qty}</div>
             </div>
-            <div class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-4)">
-              ${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join('<br>')}
-            </div>
-            <a class="btn btn--ghost btn--sm" style="margin-top:var(--space-4)"
-               href="track-order.html">Track this order</a>
-          </div>`).join('')
-          : `<div class="empty"><h3>No orders yet</h3>
-               <p>When you buy something it will show up here.</p>
-               <a class="btn btn--primary" href="collection.html">Start shopping</a></div>`;
-      } catch (e) {
-        host.innerHTML = `<div class="panel"><p class="muted">
-          Could not load your orders: ${esc(e.message)}</p></div>`;
+            <div style="margin-left:auto;font-size:var(--fs-sm)">${inr(i.lineTotal || 0)}</div>
+          </div>`).join('')}
+        </div>
+      </article>`;
+    }
+
+    function tabBody(snap) {
+      if (tab === 'orders') {
+        if (!loaded) return '<p class="muted center">Loading your orders…</p>';
+        if (!orders.length) {
+          return `<div class="empty">
+            <h3>No orders yet</h3>
+            <p>When you buy something it will appear here, with live tracking.</p>
+            <a class="btn btn--primary" href="collection.html">Start shopping</a>
+          </div>`;
+        }
+        return orders.map(orderCard).join('');
       }
+
+      if (tab === 'wishlist') {
+        const saved = D.products.filter(p => C.snapshot().wishlist.includes(p.slug));
+        return saved.length
+          ? `<div class="product-grid product-grid--3">${saved.map(productCard).join('')}</div>`
+          : `<div class="empty"><h3>Nothing saved</h3>
+               <p>Tap the heart on any piece and it waits for you here.</p>
+               <a class="btn btn--primary" href="collection.html">Browse jewellery</a></div>`;
+      }
+
+      // profile
+      const u = snap.user;
+      return `<div class="panel">
+        <h3>Your details</h3>
+        <table class="spec-table">
+          <tr><td>Name</td><td>${esc(u.name || '—')}</td></tr>
+          <tr><td>Email</td><td>${esc(u.email || '—')}</td></tr>
+          <tr><td>Sign-in method</td><td>One-time code by email</td></tr>
+        </table>
+        <p class="muted" style="font-size:var(--fs-xs);margin-top:var(--space-5)">
+          Your name and email come from your sign-in account. Delivery addresses
+          are captured per order at checkout.
+        </p>
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-6);flex-wrap:wrap">
+          <a class="btn btn--ghost btn--sm" href="collection.html">Continue shopping</a>
+          <button class="btn btn--ghost btn--sm" type="button" id="doSignOut2">Sign out</button>
+        </div>
+      </div>`;
+    }
+
+    function paintDashboard(snap) {
+      const u = snap.user;
+      const initials = (u.name || u.email || 'A').trim().split(/\s+/)
+        .map(w => w[0]).slice(0, 2).join('').toUpperCase();
+      const spent = orders
+        .filter(o => o.status !== 'cancelled')
+        .reduce((s, o) => s + o.total, 0);
+      const active = orders.filter(o => ['placed', 'packed', 'shipped'].includes(o.status)).length;
+
+      box.innerHTML = `
+        <div class="dash-hero">
+          <div class="dash-hero__avatar">
+            ${u.imageUrl ? `<img src="${esc(u.imageUrl)}" alt="">` : esc(initials)}
+          </div>
+          <div class="dash-hero__who">
+            <p>Signed in</p>
+            <h2>${esc(u.name)}</h2>
+            <span>${esc(u.email || '')}</span>
+          </div>
+          <button class="btn btn--light btn--sm" type="button" id="doSignOut">Sign out</button>
+        </div>
+
+        <div class="dash-stats">
+          <div class="dash-stat"><strong>${orders.length}</strong><span>Orders</span></div>
+          <div class="dash-stat"><strong>${inr(spent)}</strong><span>Total spent</span></div>
+          <div class="dash-stat"><strong>${active}</strong><span>In progress</span></div>
+        </div>
+
+        <div class="dash-tabs">
+          <button class="dash-tab ${tab === 'orders' ? 'is-active' : ''}" data-tab="orders">Orders</button>
+          <button class="dash-tab ${tab === 'wishlist' ? 'is-active' : ''}" data-tab="wishlist">Wishlist</button>
+          <button class="dash-tab ${tab === 'profile' ? 'is-active' : ''}" data-tab="profile">Profile</button>
+        </div>
+        <div id="dashBody">${tabBody(snap)}</div>`;
+
+      $('#doSignOut').addEventListener('click', () => window.AU_AUTH.signOut());
+      $('#doSignOut2')?.addEventListener('click', () => window.AU_AUTH.signOut());
+      $$('.dash-tab').forEach(b => b.addEventListener('click', () => {
+        tab = b.dataset.tab;
+        paintDashboard(snap);
+      }));
+
+      if (!loaded) loadOrders(snap);
+    }
+
+    async function loadOrders(snap) {
+      try {
+        const res = await window.AU_API.myOrders();
+        orders = res.orders || [];
+      } catch (e) {
+        orders = [];
+      }
+      loaded = true;
+      paintDashboard(snap);
     }
 
     function paint(snap) {
-      // Still starting up — say so rather than showing an empty page.
       if (!snap.ready) {
-        box.innerHTML = `<div class="panel center">
-          <p class="muted">Loading your account…</p></div>`;
+        box.innerHTML = '<div class="panel center"><p class="muted">Loading your account…</p></div>';
         return;
       }
 
-      // Clerk is switched on but could not start (offline, blocked, slow CDN).
       if (snap.enabled && snap.error) {
         box.innerHTML = `<div class="panel center">
           <p class="eyebrow">Sign-in unavailable</p>
           <h3>We could not reach the sign-in service</h3>
-          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
-            ${esc(snap.error)}</p>
+          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">${esc(snap.error)}</p>
           <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
             Your bag and checkout still work — you can order as a guest.</p>
           <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-6);flex-wrap:wrap">
             <button class="btn btn--gold" type="button" id="retryAuth">Try again</button>
             <a class="btn btn--ghost" href="collection.html">Keep shopping</a>
-          </div>
-        </div>`;
+          </div></div>`;
         $('#retryAuth').addEventListener('click', () => window.AU_AUTH.retry());
         return;
       }
 
-      // Running without Clerk configured at all.
       if (!snap.enabled) {
         box.innerHTML = `<div class="panel center">
           <p class="eyebrow">Guest checkout</p>
           <h3>Accounts are not switched on yet</h3>
           <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
-            You can still order without an account, and track any order with the
-            reference from your confirmation email.</p>
+            You can still order without an account, and track any order with its reference.</p>
           <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-6);flex-wrap:wrap">
             <a class="btn btn--primary" href="track-order.html">Track an order</a>
             <a class="btn btn--ghost" href="collection.html">Start shopping</a>
-          </div>
-        </div>`;
+          </div></div>`;
         return;
       }
 
       if (!snap.signedIn) {
+        loaded = false;
+        orders = [];
         box.innerHTML = `<div class="panel center">
           <p class="eyebrow">Your account</p>
           <h3>Sign in to see your orders</h3>
@@ -773,30 +874,13 @@
           <div style="display:flex;gap:var(--space-3);justify-content:center;flex-wrap:wrap">
             <button class="btn btn--gold" type="button" id="doSignIn">Sign in</button>
             <button class="btn btn--ghost" type="button" id="doSignUp">Create an account</button>
-          </div>
-        </div>`;
+          </div></div>`;
         $('#doSignIn').addEventListener('click', () => window.AU_AUTH.signIn());
         $('#doSignUp').addEventListener('click', () => window.AU_AUTH.signUp());
         return;
       }
 
-      box.innerHTML = `
-        <div class="panel" style="margin-bottom:var(--space-6)">
-          <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap">
-            <div>
-              <p class="eyebrow">Signed in</p>
-              <strong style="font-family:var(--font-display);font-size:var(--fs-h4)">
-                ${esc(snap.user.name)}</strong>
-              <div class="muted" style="font-size:var(--fs-sm)">${esc(snap.user.email || '')}</div>
-            </div>
-            <button class="btn btn--ghost btn--sm" type="button" id="doSignOut"
-                    style="margin-left:auto">Sign out</button>
-          </div>
-        </div>
-        <div class="section-head"><p class="eyebrow">Order history</p><h2>Your orders</h2></div>
-        <div id="myOrders"></div>`;
-      $('#doSignOut').addEventListener('click', () => window.AU_AUTH.signOut());
-      paintOrders();
+      paintDashboard(snap);
     }
 
     box.innerHTML = '<div class="panel center"><p class="muted">Loading your account…</p></div>';
