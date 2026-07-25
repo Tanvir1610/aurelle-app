@@ -55,6 +55,9 @@ export const getCustomerOrders = impl.getCustomerOrders || notSupported('Order h
 export const isAdmin   = impl.isAdmin   || null;
 export const listAdmins = impl.listAdmins || (() => []);
 export const addAdmin  = impl.addAdmin  || notSupported('Admin management');
+export const removeAdmin = impl.removeAdmin || notSupported('Admin management');
+export const listCustomers = impl.listCustomers || (async () => []);
+export const listGuestBuyers = impl.listGuestBuyers || (async () => []);
 
 /* SQLite-only helpers, exported when present so existing tools keep working. */
 export const db               = impl.db;

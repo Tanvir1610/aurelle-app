@@ -16,7 +16,8 @@
   let clerkReady = false;           // true only after load() resolves
   let clerkError = null;            // why it failed, if it did
   let pendingSignIn = false;        // user clicked before Clerk was ready
-  let cache = { products: [], orders: [], messages: [], subs: [] };
+  let cache = { products: [], orders: [], messages: [], subs: [],
+                customers: [], guests: [], admins: [] };
 
   try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) { token = null; }
 
@@ -364,7 +365,7 @@
       (!q || (o.ref + o.email + o.first_name + o.last_name).toLowerCase().includes(q)));
 
     $('#ordersBody').innerHTML = list.length ? list.map(o => `
-      <tr>
+      <tr data-open-order="${esc(o.ref)}" style="cursor:pointer">
         <td><span class="tbl__name">${esc(o.ref)}</span></td>
         <td>${esc(o.first_name)} ${esc(o.last_name)}<div class="tbl__sub">${esc(o.email)}<br>${esc(o.city)} ${esc(o.pincode)}</div></td>
         <td class="tbl__sub">${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join('<br>')}</td>
@@ -381,6 +382,12 @@
       : `<tr><td colspan="6"><div class="state"><h3>No orders here</h3>
            <p>Place a test order on the storefront and refresh.</p></div></td></tr>`;
   }
+
+  $('#ordersBody').addEventListener('click', (e) => {
+    if (e.target.closest('select')) return;   // status dropdown handles itself
+    const row = e.target.closest('[data-open-order]');
+    if (row) openOrder(row.dataset.openOrder);
+  });
 
   $('#ordersBody').addEventListener('change', async (e) => {
     const sel = e.target.closest('[data-order]');
@@ -532,6 +539,191 @@
     } catch (err) { alert(err.message); }
   });
 
+  /* ---------------------------------------------------- customers -- */
+  function renderCustomers() {
+    const q = $('#customerSearch').value.toLowerCase();
+    const type = $('#customerType').value;
+
+    const rows = [];
+    if (type !== 'guest') {
+      cache.customers.forEach(c => rows.push({
+        name: [c.first_name, c.last_name].filter(Boolean).join(' ') || '—',
+        email: c.email, phone: c.phone, orders: Number(c.orders) || 0,
+        spent: Number(c.spent) || 0, last: c.last_order, account: true,
+      }));
+    }
+    if (type !== 'account') {
+      cache.guests.forEach(g => rows.push({
+        name: [g.first_name, g.last_name].filter(Boolean).join(' ') || '—',
+        email: g.email, phone: g.phone, orders: Number(g.orders) || 0,
+        spent: Number(g.spent) || 0, last: g.last_order, account: false, city: g.city,
+      }));
+    }
+
+    const list = rows
+      .filter(r => !q || (r.name + r.email).toLowerCase().includes(q))
+      .sort((a, b) => b.spent - a.spent);
+
+    $('#customersBody').innerHTML = list.length ? list.map(c => `
+      <tr>
+        <td><span class="tbl__name">${esc(c.name)}</span>
+          <div class="tbl__sub">
+            <span class="tag ${c.account ? 'tag--delivered' : 'tag--placed'}">
+              ${c.account ? 'Account' : 'Guest'}</span></div></td>
+        <td class="tbl__sub">${esc(c.email)}${c.phone ? '<br>' + esc(c.phone) : ''}</td>
+        <td class="num">${c.orders}</td>
+        <td class="num">${inr(c.spent)}</td>
+        <td class="tbl__sub">${c.last ? when(c.last) : 'never'}</td>
+        <td><button class="link-btn" data-cust-orders="${esc(c.email)}">View orders</button></td>
+      </tr>`).join('')
+      : `<tr><td colspan="6"><div class="state"><h3>No customers yet</h3>
+           <p>They appear here after the first order or sign-up.</p></div></td></tr>`;
+  }
+
+  $('#customerSearch').addEventListener('input', renderCustomers);
+  $('#customerType').addEventListener('change', renderCustomers);
+
+  // "View orders" jumps to the Orders panel pre-filtered to that person.
+  $('#customersBody').addEventListener('click', e => {
+    const b = e.target.closest('[data-cust-orders]');
+    if (!b) return;
+    $('#orderSearch').value = b.dataset.custOrders;
+    $('#orderStatus').value = 'all';
+    document.querySelector('.side nav button[data-view="orders"]').click();
+    renderOrders();
+  });
+
+  /* ------------------------------------------------------- admins -- */
+  function renderAdmins() {
+    $('#adminsBody').innerHTML = cache.admins.length ? cache.admins.map(a => `
+      <tr>
+        <td><span class="tbl__name">${esc(a.email)}</span></td>
+        <td class="tbl__sub">${esc(a.name || '—')}</td>
+        <td><span class="tag ${a.role === 'owner' ? 'tag--delivered' : 'tag--shipped'}">
+          ${esc(a.role || 'manager')}</span></td>
+        <td class="tbl__sub">${a.clerk_user_id ? 'signed in before' : 'not yet'}</td>
+        <td class="tbl__sub">${when(a.created_at)}</td>
+        <td>${cache.admins.length > 1
+          ? `<button class="link-btn link-btn--danger" data-rm-admin="${esc(a.email)}">Remove</button>`
+          : '<span class="tbl__sub">last admin</span>'}</td>
+      </tr>`).join('')
+      : `<tr><td colspan="6"><div class="state"><h3>No administrators</h3>
+           <p>Set ADMIN_EMAIL on the server and restart.</p></div></td></tr>`;
+  }
+
+  const adminScrim = $('#adminScrim');
+  $('#newAdminBtn').addEventListener('click', () => {
+    $('#aEmail').value = ''; $('#aName').value = ''; $('#aRole').value = 'manager';
+    $('#adminError').style.display = 'none';
+    $$('.field--error', adminScrim).forEach(f => f.classList.remove('field--error'));
+    adminScrim.classList.add('is-open');
+  });
+  $('#cancelAdmin').addEventListener('click', () => adminScrim.classList.remove('is-open'));
+  adminScrim.addEventListener('click', e => { if (e.target === adminScrim) adminScrim.classList.remove('is-open'); });
+
+  $('#adminForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = $('#aEmail').value.trim().toLowerCase();
+    const bad = !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    $('#aEmail').closest('.field').classList.toggle('field--error', bad);
+    if (bad) return;
+    try {
+      await api('/api/admin/admins', { method: 'POST',
+        body: { email, name: $('#aName').value.trim(), role: $('#aRole').value } });
+      adminScrim.classList.remove('is-open');
+      await loadAdmins();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+      $('#adminError').style.display = 'block';
+    }
+  });
+
+  $('#adminsBody').addEventListener('click', async e => {
+    const b = e.target.closest('[data-rm-admin]');
+    if (!b) return;
+    if (!confirm(`Remove ${b.dataset.rmAdmin}? They lose dashboard access immediately.`)) return;
+    try {
+      await api(`/api/admin/admins/${encodeURIComponent(b.dataset.rmAdmin)}`, { method: 'DELETE' });
+      await loadAdmins();
+    } catch (err) { alert(err.message); }
+  });
+
+  /* -------------------------------------------------- order drawer -- */
+  const orderScrim = $('#orderScrim');
+  const closeOrderDrawer = () => {
+    orderScrim.classList.remove('is-open');
+    $('#orderDrawer').classList.remove('is-open');
+    document.body.style.overflow = '';
+  };
+  $('#closeOrder').addEventListener('click', closeOrderDrawer);
+  orderScrim.addEventListener('click', closeOrderDrawer);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOrderDrawer(); });
+
+  async function openOrder(ref) {
+    orderScrim.classList.add('is-open');
+    $('#orderDrawer').classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    $('#orderDrawerTitle').textContent = ref;
+    $('#orderDrawerBody').innerHTML = '<p class="tbl__sub">Loading…</p>';
+    $('#orderDrawerFoot').innerHTML = '';
+
+    try {
+      const o = await api(`/api/admin/orders/${ref}`);
+      const items = o.items || [];
+      $('#orderDrawerBody').innerHTML = `
+        <p class="eyebrow">${esc(o.status)}</p>
+        <h3 style="font-family:var(--font-display);font-size:var(--fs-h3)">${inr(o.total)}</h3>
+        <div class="tbl__sub" style="margin-bottom:var(--space-6)">Placed ${when(o.created_at)}</div>
+
+        <h4 style="font-size:var(--fs-eyebrow);letter-spacing:var(--ls-wider);text-transform:uppercase;
+                   color:var(--text-muted);margin-bottom:var(--space-3)">Items</h4>
+        ${items.map(i => `<div class="line" style="grid-template-columns:1fr auto">
+          <div><span class="line__name">${esc(i.name)}</span>
+            <div class="line__variant">${esc(i.finish || '')} · qty ${i.qty} · ${inr(i.unit_price)} each</div></div>
+          <div class="line__price">${inr(i.line_total)}</div>
+        </div>`).join('')}
+
+        <h4 style="font-size:var(--fs-eyebrow);letter-spacing:var(--ls-wider);text-transform:uppercase;
+                   color:var(--text-muted);margin:var(--space-6) 0 var(--space-3)">Deliver to</h4>
+        <table class="spec-table">
+          <tr><td>Name</td><td>${esc(o.first_name)} ${esc(o.last_name)}</td></tr>
+          <tr><td>Email</td><td>${esc(o.email)}</td></tr>
+          <tr><td>Phone</td><td>${esc(o.phone)}</td></tr>
+          <tr><td>Address</td><td>${esc(o.address)}</td></tr>
+          <tr><td>City</td><td>${esc(o.city)} ${esc(o.pincode)}</td></tr>
+          <tr><td>Payment</td><td>${esc(o.payment)}</td></tr>
+          <tr><td>Account</td><td>${o.clerk_user_id ? 'signed in' : 'guest checkout'}</td></tr>
+        </table>
+
+        <div class="totals" style="margin-top:var(--space-6)">
+          <div><span>Subtotal</span><span>${inr(o.subtotal)}</span></div>
+          <div><span>Shipping</span><span>${o.shipping === 0 ? 'Free' : inr(o.shipping)}</span></div>
+          <div class="is-total"><span>Total</span><span>${inr(o.total)}</span></div>
+        </div>`;
+
+      $('#orderDrawerFoot').innerHTML = `
+        <label style="display:block;font-size:var(--fs-eyebrow);letter-spacing:var(--ls-wider);
+                      text-transform:uppercase;color:var(--text-muted);margin-bottom:var(--space-3)">
+          Update status</label>
+        <select class="select" id="drawerStatus" style="width:100%">
+          ${['placed','packed','shipped','delivered','cancelled'].map(st =>
+            `<option value="${st}"${o.status === st ? ' selected' : ''}>${st[0].toUpperCase() + st.slice(1)}</option>`).join('')}
+        </select>`;
+
+      $('#drawerStatus').addEventListener('change', async ev => {
+        try {
+          await api(`/api/admin/orders/${ref}`, { method: 'PATCH', body: { status: ev.target.value } });
+          const row = cache.orders.find(x => x.ref === ref);
+          if (row) row.status = ev.target.value;
+          renderOrders();
+          loadStats();
+        } catch (err) { alert(err.message); }
+      });
+    } catch (e) {
+      $('#orderDrawerBody').innerHTML = `<p class="tbl__sub">Could not load: ${esc(e.message)}</p>`;
+    }
+  }
+
   /* -------------------------------------------------- subscribers -- */
   function renderSubs() {
     $('#subsBody').innerHTML = cache.subs.length
@@ -556,10 +748,17 @@
   async function loadProducts() { cache.products = (await api('/api/admin/products')).products; renderProducts(); }
   async function loadMessages() { cache.messages = (await api('/api/admin/messages')).messages; renderMessages(); renderFeed(); }
   async function loadSubs()     { cache.subs = (await api('/api/admin/subscribers')).subscribers; renderSubs(); }
+  async function loadCustomers() {
+    const r = await api('/api/admin/customers');
+    cache.customers = r.customers || []; cache.guests = r.guests || [];
+    renderCustomers();
+  }
+  async function loadAdmins()   { cache.admins = (await api('/api/admin/admins')).admins; renderAdmins(); }
 
   async function loadAll() {
     try {
-      await Promise.all([loadStats(), loadOrders(), loadProducts(), loadMessages(), loadSubs()]);
+      await Promise.all([loadStats(), loadOrders(), loadProducts(), loadMessages(),
+                         loadSubs(), loadCustomers(), loadAdmins()]);
     } catch (e) {
       console.error(e);
       if (token) alert(`Could not load dashboard data: ${e.message}`);

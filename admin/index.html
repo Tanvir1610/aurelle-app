@@ -32,8 +32,10 @@
       <button data-view="overview" class="is-active">Overview</button>
       <button data-view="orders">Orders <span class="pill" id="pillOrders" hidden>0</span></button>
       <button data-view="products">Products</button>
+      <button data-view="customers">Customers</button>
       <button data-view="messages">Messages <span class="pill" id="pillMsgs" hidden>0</span></button>
       <button data-view="subscribers">Subscribers</button>
+      <button data-view="admins">Access</button>
     </nav>
     <div class="side__foot">
       <strong id="whoName">—</strong>
@@ -128,6 +130,28 @@
       <div class="card-box" id="messagesBody"></div>
     </section>
 
+    <!-- CUSTOMERS -->
+    <section data-panel="customers" hidden>
+      <div class="page-head">
+        <div><h2>Customers</h2><p>Everyone who has bought or created an account.</p></div>
+      </div>
+      <div class="toolbar">
+        <input type="search" id="customerSearch" placeholder="Search name or email">
+        <select id="customerType">
+          <option value="all">Everyone</option>
+          <option value="account">With an account</option>
+          <option value="guest">Guest checkout only</option>
+        </select>
+      </div>
+      <div class="card-box">
+        <table class="tbl">
+          <thead><tr><th>Customer</th><th>Contact</th><th class="num">Orders</th>
+            <th class="num">Lifetime spend</th><th>Last order</th><th></th></tr></thead>
+          <tbody id="customersBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- SUBSCRIBERS -->
     <section data-panel="subscribers" hidden>
       <div class="page-head">
@@ -142,7 +166,73 @@
       </div>
     </section>
 
+    <!-- ACCESS -->
+    <section data-panel="admins" hidden>
+      <div class="page-head">
+        <div><h2>Dashboard access</h2>
+          <p>Only these addresses can open this dashboard. Sign-in itself is handled by Clerk.</p></div>
+        <button class="btn btn--gold btn--sm" type="button" id="newAdminBtn">Add administrator</button>
+      </div>
+      <div class="card-box">
+        <table class="tbl">
+          <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Linked</th><th>Added</th><th></th></tr></thead>
+          <tbody id="adminsBody"></tbody>
+        </table>
+      </div>
+      <div class="card-box">
+        <h3>How access works</h3>
+        <p style="font-size:var(--fs-sm);color:var(--text-secondary);line-height:var(--lh-relaxed)">
+          Signing in with Clerk proves who someone is. Appearing in this list is what
+          grants dashboard access. Anyone can create a customer account on the
+          storefront; only these addresses reach the back office.
+        </p>
+        <p style="font-size:var(--fs-sm);color:var(--text-secondary);line-height:var(--lh-relaxed);margin-top:var(--space-3)">
+          The address in the server's <code>ADMIN_EMAIL</code> variable is re-added on
+          every restart, so it cannot be locked out by accident.
+        </p>
+      </div>
+    </section>
+
   </main>
+</div>
+
+<!-- ORDER DETAIL -->
+<div class="drawer-scrim" id="orderScrim"></div>
+<aside class="drawer" id="orderDrawer" role="dialog" aria-modal="true" aria-label="Order detail">
+  <div class="drawer__head">
+    <h3 id="orderDrawerTitle">Order</h3>
+    <button class="icon-btn" type="button" id="closeOrder" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer__body" id="orderDrawerBody"></div>
+  <div class="drawer__foot" id="orderDrawerFoot"></div>
+</aside>
+
+<!-- ADD ADMIN -->
+<div class="modal-scrim" id="adminScrim">
+  <form class="modal" id="adminForm" novalidate style="max-width:440px">
+    <h3>Add administrator</h3>
+    <div class="field">
+      <label for="aEmail">Email address</label>
+      <input id="aEmail" type="email" required placeholder="manager@yourshop.com">
+      <span class="field__err">Enter a valid email address</span>
+    </div>
+    <div class="field"><label for="aName">Name</label><input id="aName" placeholder="Store manager"></div>
+    <div class="field"><label for="aRole">Role</label>
+      <select id="aRole"><option value="manager">Manager</option><option value="owner">Owner</option></select>
+    </div>
+    <p class="login-hint" style="margin-top:0">
+      They sign in through Clerk with this address. There is no password to set —
+      Clerk emails them a one-time code.
+    </p>
+    <div id="adminError" style="display:none;color:var(--red-500);font-size:var(--fs-xs)"></div>
+    <div class="modal__actions">
+      <button class="btn btn--ghost btn--sm" type="button" id="cancelAdmin">Cancel</button>
+      <button class="btn btn--gold btn--sm" type="submit">Add</button>
+    </div>
+  </form>
 </div>
 
 <!-- PRODUCT EDITOR -->

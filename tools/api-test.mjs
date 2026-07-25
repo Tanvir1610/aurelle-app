@@ -224,6 +224,74 @@ console.log('\n── admin API ────────────────
   t('admin reads subscribers', r.status === 200 && r.data.subscribers.length > 0);
 }
 
+console.log('\n── customers panel ─────────────────────────────');
+{
+  const r = await call('GET', '/api/admin/customers', { token });
+  t('customers endpoint responds', r.status === 200);
+  t('guest buyers are grouped by email',
+     Array.isArray(r.data.guests) && r.data.guests.length > 0,
+     JSON.stringify(r.data.guests?.length));
+  const g = r.data.guests[0];
+  t('each buyer carries order count and spend',
+     typeof g.orders === 'number' && typeof g.spent === 'number', JSON.stringify(g));
+  t('signed-in customers are listed separately', Array.isArray(r.data.customers));
+
+  const anon = await call('GET', '/api/admin/customers');
+  t('customer data requires an admin', anon.status === 401);
+}
+
+console.log('\n── order detail drawer ─────────────────────────');
+{
+  const list = await call('GET', '/api/admin/orders', { token });
+  const ref = list.data.orders[0].ref;
+  const r = await call('GET', `/api/admin/orders/${ref}`, { token });
+  t('single order is retrievable', r.status === 200 && r.data.ref === ref);
+  t('it includes the delivery address', !!r.data.address && !!r.data.pincode);
+  t('it includes line items', Array.isArray(r.data.items) && r.data.items.length > 0);
+
+  const missing = await call('GET', '/api/admin/orders/AUR000001', { token });
+  t('an unknown reference is 404', missing.status === 404);
+
+  const anon = await call('GET', `/api/admin/orders/${ref}`);
+  t('order detail requires an admin', anon.status === 401);
+}
+
+console.log('\n── access management ───────────────────────────');
+{
+  const before = await call('GET', '/api/admin/admins', { token });
+  t('the admin list is readable', before.status === 200 && before.data.admins.length >= 1);
+
+  const added = await call('POST', '/api/admin/admins', {
+    token, body: { email: 'Manager@Shop.com', name: 'Shop manager', role: 'manager' },
+  });
+  t('an administrator can be added', added.status === 200);
+
+  const after = await call('GET', '/api/admin/admins', { token });
+  t('they appear lowercase in the list',
+     after.data.admins.some(a => a.email === 'manager@shop.com'),
+     after.data.admins.map(a => a.email).join(', '));
+
+  const bad = await call('POST', '/api/admin/admins', { token, body: { email: 'not-an-email' } });
+  t('an invalid address is rejected', bad.status === 400);
+
+  const removed = await call('DELETE', '/api/admin/admins/manager@shop.com', { token });
+  t('an administrator can be removed', removed.status === 200);
+
+  const gone = await call('GET', '/api/admin/admins', { token });
+  t('and they leave the list',
+     !gone.data.admins.some(a => a.email === 'manager@shop.com'));
+}
+{
+  // Removing the only administrator would lock everyone out permanently.
+  const list = await call('GET', '/api/admin/admins', { token });
+  if (list.data.admins.length === 1) {
+    const r = await call('DELETE', `/api/admin/admins/${list.data.admins[0].email}`, { token });
+    t('the last administrator cannot be removed', r.status === 400, JSON.stringify(r.data));
+  } else {
+    t('the last administrator cannot be removed', true);
+  }
+}
+
 console.log('\n── static hosting & safety ─────────────────────');
 {
   const r = await fetch(BASE + '/');

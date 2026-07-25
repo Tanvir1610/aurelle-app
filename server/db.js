@@ -509,6 +509,42 @@ export function getCustomerOrders(clerkUserId) {
   return listOrders({ clerkUserId, limit: 50 });
 }
 
+/** Customers with their lifetime order stats, richest first. */
+export function listCustomers() {
+  return db.prepare(`
+    SELECT c.clerk_user_id, c.email, c.first_name, c.last_name, c.phone,
+           c.created_at, c.last_seen_at,
+           COUNT(o.id)                       AS orders,
+           COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total ELSE 0 END), 0) AS spent,
+           MAX(o.created_at)                 AS last_order
+      FROM customers c
+      LEFT JOIN orders o ON o.clerk_user_id = c.clerk_user_id
+     GROUP BY c.clerk_user_id
+     ORDER BY spent DESC, c.created_at DESC`).all();
+}
+
+/** Guests who ordered without signing in, grouped by email. */
+export function listGuestBuyers() {
+  return db.prepare(`
+    SELECT email,
+           MIN(first_name) AS first_name, MIN(last_name) AS last_name,
+           MIN(phone) AS phone, MIN(city) AS city,
+           COUNT(*) AS orders,
+           COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS spent,
+           MAX(created_at) AS last_order
+      FROM orders
+     WHERE clerk_user_id IS NULL
+     GROUP BY email
+     ORDER BY spent DESC`).all();
+}
+
+export function removeAdmin(email) {
+  const addr = String(email || '').toLowerCase().trim();
+  const remaining = db.prepare('SELECT COUNT(*) AS n FROM admins').get().n;
+  if (remaining <= 1) throw new Error('Cannot remove the last administrator');
+  return db.prepare('DELETE FROM admins WHERE email = ?').run(addr).changes > 0;
+}
+
 /* ------------------------------------------------------------ stats -- */
 export function stats() {
   const one = (sql, ...a) => db.prepare(sql).get(...a);

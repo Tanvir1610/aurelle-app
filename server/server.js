@@ -296,6 +296,31 @@ route('PATCH', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
   } catch (e) { return bad(res, e.message); }
 }, { auth: true });
 
+route('GET', /^\/api\/admin\/customers$/, async (req, res) => {
+  const [signedIn, guests] = await Promise.all([
+    DB.listCustomers(), DB.listGuestBuyers(),
+  ]);
+  ok(res, { customers: signedIn, guests });
+}, { auth: true });
+
+/* Full detail for one order, for the drawer in the dashboard. */
+route('GET', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
+  const o = await DB.getOrder(m[1].toUpperCase());
+  return o ? ok(res, o) : bad(res, 'Order not found', 404);
+}, { auth: true });
+
+route('DELETE', /^\/api\/admin\/admins\/(.+)$/, async (req, res, m, url, user) => {
+  const email = decodeURIComponent(m[1]).toLowerCase().trim();
+  if (user.email && user.email.toLowerCase() === email) {
+    return bad(res, 'You cannot remove your own access');
+  }
+  try {
+    return await DB.removeAdmin(email)
+      ? ok(res, { removed: true })
+      : bad(res, 'Not found', 404);
+  } catch (e) { return bad(res, e.message); }
+}, { auth: true });
+
 route('GET', /^\/api\/admin\/messages$/, async (req, res) =>
   ok(res, { messages: await DB.listMessages() }), { auth: true });
 

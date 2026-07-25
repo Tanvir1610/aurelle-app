@@ -277,6 +277,53 @@ export async function addAdmin({ email, name, role = 'manager' }) {
   return rows[0];
 }
 
+/** Customers with lifetime order stats. PostgREST cannot aggregate across
+ *  a join, so pull both sides and combine here — the volumes are small. */
+export async function listCustomers() {
+  const [people, orders] = await Promise.all([
+    rest(`/${T.customers}?select=*&order=created_at.desc`),
+    rest(`/${T.orders}?select=clerk_user_id,total,status,created_at&clerk_user_id=not.is.null`),
+  ]);
+  const agg = {};
+  for (const o of orders) {
+    const k = o.clerk_user_id;
+    if (!agg[k]) agg[k] = { orders: 0, spent: 0, last_order: null };
+    agg[k].orders += 1;
+    if (o.status !== 'cancelled') agg[k].spent += Number(o.total);
+    if (!agg[k].last_order || o.created_at > agg[k].last_order) agg[k].last_order = o.created_at;
+  }
+  return people.map(c => ({
+    clerk_user_id: c.clerk_user_id, email: c.email,
+    first_name: c.first_name, last_name: c.last_name, phone: c.phone,
+    created_at: c.created_at, last_seen_at: c.last_seen_at,
+    ...(agg[c.clerk_user_id] || { orders: 0, spent: 0, last_order: null }),
+  })).sort((a, b) => b.spent - a.spent);
+}
+
+export async function listGuestBuyers() {
+  const rows = await rest(`/${T.orders}?select=email,first_name,last_name,phone,city,total,status,created_at&clerk_user_id=is.null`);
+  const by = {};
+  for (const o of rows) {
+    if (!by[o.email]) by[o.email] = {
+      email: o.email, first_name: o.first_name, last_name: o.last_name,
+      phone: o.phone, city: o.city, orders: 0, spent: 0, last_order: null,
+    };
+    const g = by[o.email];
+    g.orders += 1;
+    if (o.status !== 'cancelled') g.spent += Number(o.total);
+    if (!g.last_order || o.created_at > g.last_order) g.last_order = o.created_at;
+  }
+  return Object.values(by).sort((a, b) => b.spent - a.spent);
+}
+
+export async function removeAdmin(email) {
+  const all = await listAdmins();
+  if (all.length <= 1) throw new Error('Cannot remove the last administrator');
+  await rest(`/${T.admins}?email=eq.${encodeURIComponent(String(email).toLowerCase())}`,
+             { method: 'DELETE', prefer: 'return=minimal' });
+  return true;
+}
+
 /* ------------------------------------------------------------ stats -- */
 export async function stats() {
   const s = await rpc('aurelle_stats');
