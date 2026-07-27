@@ -37,7 +37,7 @@
   /** Current bearer token, whichever auth driver is active. */
   async function bearer() {
     // A password token, once issued, is authoritative — it does not depend
-    // on Clerk being reachable.
+    // on Clerk being reachable or correctly configured.
     if (token) return token;
     if (cfg.auth === 'clerk' && clerk && clerk.session) {
       try { return await clerk.session.getToken(); } catch (e) { return null; }
@@ -115,6 +115,14 @@
        a 401 here means our server could not accept the token, which is a
        server-side configuration problem. Signing out would bounce them back
        to the login card and loop forever. */
+    /* A 401 from the login endpoint means "wrong credentials", not "session
+       expired". The caller shows it inline on the form. */
+    if (res.status === 401 && path === '/api/auth/login') {
+      let msg = 'Email or password is incorrect';
+      try { msg = (await res.clone().json()).error || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+
     if (res.status === 401 && t) {
       if (cfg.auth === 'clerk') {
         let detail = '';
@@ -147,12 +155,38 @@
   }
 
   /* ------------------------------------------------------- auth -- */
+  const PAGE = document.body.dataset.page || 'login';
+
+  /** Single navigation point, so page moves are easy to follow and to test. */
+  function goTo(url) {
+    if (typeof window.__navigate === 'function') return window.__navigate(url);
+    window.location.href = url;
+  }
+
+  /**
+   * Signed in. The login page and the dashboard are separate documents, so
+   * from the login page this is a navigation, not a panel swap.
+   */
   function showApp(user) {
-    $('#loginView').hidden = true;
-    $('#appView').hidden = false;
-    $('#whoName').textContent = user.name;
-    $('#whoEmail').textContent = user.email;
+    if (PAGE === 'login') {
+      try { sessionStorage.setItem('aurelle.admin.user', JSON.stringify(user)); } catch (e) {}
+      goTo('dashboard.html');
+      return;
+    }
+    const nameEl = $('#whoName');
+    if (nameEl) nameEl.textContent = user.name || user.email || 'Signed in';
+    const mailEl = $('#whoEmail');
+    if (mailEl) mailEl.textContent = user.email || '';
+    const app = $('#appView');
+    if (app) app.hidden = false;
+    const login = $('#loginView');
+    if (login) login.hidden = true;
     loadAll();
+  }
+
+  /** Not signed in while on the dashboard page — go back to the login page. */
+  function bounceToLogin() {
+    if (PAGE === 'dashboard') goTo('./');
   }
 
   async function signOut() {
@@ -181,13 +215,13 @@
               style="margin-top:var(--space-5)">Try again</button>
       <button class="btn btn--ghost btn--block" type="button" id="blockedOut"
               style="margin-top:var(--space-3)">Sign out</button>`;
-    $('#blockedRetry').addEventListener('click', async () => {
+    $('#blockedRetry')?.addEventListener('click', async () => {
       try {
         const me = await api('/api/auth/me');
         showApp(me.user);
       } catch (e) { /* the screen has already been repainted */ }
     });
-    $('#blockedOut').addEventListener('click', signOut);
+    $('#blockedOut')?.addEventListener('click', signOut);
   }
 
   /** Signed in with Clerk, but not on the admin allow-list. */
@@ -212,82 +246,76 @@
       </div>
       <button class="btn btn--ghost btn--block" type="button" id="denyOut"
               style="margin-top:var(--space-5)">Sign out</button>`;
-    $('#denyOut').addEventListener('click', signOut);
+    $('#denyOut')?.addEventListener('click', signOut);
   }
 
-  /** Paints the sign-in options this deployment actually supports. */
+  /** Paints either the Clerk button or the password form. */
   function renderLogin() {
     const panel = $('#loginPanel');
+    if (!panel) return;
     const useClerk = cfg.auth === 'clerk' && cfg.clerk && cfg.clerk.enabled;
     const usePassword = cfg.passwordLogin !== false;
 
+    let html = (useClerk && clerkError && !usePassword)
+      ? '<h1>Sign-in service unavailable</h1>'
+      : '<h1>Store dashboard</h1>';
+
     if (useClerk && clerkError) {
-      panel.innerHTML = `
-        <h1>Sign-in service unavailable</h1>
-        <p style="font-size:var(--fs-sm);color:var(--red-500);text-align:center;margin-bottom:var(--space-4)">
-          ${esc(clerkError)}</p>
-        ${usePassword ? `
-          <div class="login-hint" style="margin-bottom:var(--space-5)">
-            You can still sign in with your email and password below.
-          </div>${passwordFormHTML()}` : `
-          <div class="login-hint" style="margin-bottom:var(--space-5)">
+      html += `<p style="font-size:var(--fs-sm);color:var(--red-500);text-align:center;
+                         margin-bottom:var(--space-4)">
+          ${usePassword ? 'Email code sign-in is unavailable: ' : ''}${esc(clerkError)}
+        </p>`;
+      if (!usePassword) {
+        html += `<div class="login-hint" style="margin-bottom:var(--space-5)">
             Check that this site's address is listed in Clerk under Domains, and
-            that both Clerk keys come from the same instance.
-          </div>
-          <button class="btn btn--gold btn--block" type="button" id="clerkRetry">Try again</button>`}`;
-      $('#clerkRetry')?.addEventListener('click', startClerk);
-      wirePasswordForm();
-      return;
-    }
-
-    let html = '<h1>Store dashboard</h1>';
-
-    if (useClerk) {
+            that both Clerk keys come from the same instance.</div>
+          <button class="btn btn--gold btn--block" type="button" id="clerkRetry">Try again</button>`;
+      }
+    } else if (useClerk) {
       const waiting = !clerkReady;
       html += `
-        <p style="font-size:var(--fs-sm);color:var(--text-secondary);text-align:center;margin-bottom:var(--space-5)">
-          We email you a one-time code.
-        </p>
+        <p style="font-size:var(--fs-sm);color:var(--text-secondary);text-align:center;
+                  margin-bottom:var(--space-5)">We email you a one-time code.</p>
         <button class="btn btn--gold btn--block" type="button" id="clerkSignIn"
                 ${waiting ? 'disabled' : ''}>
-          ${waiting ? 'Preparing sign-in…' : 'Sign in with email code'}
-        </button>`;
-      if (usePassword) {
-        html += `
-          <div style="display:flex;align-items:center;gap:var(--space-3);margin:var(--space-5) 0">
-            <span style="flex:1;height:1px;background:var(--border)"></span>
-            <span style="font-size:var(--fs-xs);color:var(--text-muted);
-                         letter-spacing:var(--ls-wide);text-transform:uppercase">or</span>
-            <span style="flex:1;height:1px;background:var(--border)"></span>
-          </div>${passwordFormHTML()}`;
+          ${waiting ? 'Preparing sign-in…' : 'Sign in with email code'}</button>`;
+    }
+
+    if (usePassword) {
+      if (useClerk && !clerkError) {
+        html += `<div style="display:flex;align-items:center;gap:var(--space-3);margin:var(--space-5) 0">
+          <span style="flex:1;height:1px;background:var(--border)"></span>
+          <span style="font-size:var(--fs-xs);color:var(--text-muted);
+                       letter-spacing:var(--ls-wide);text-transform:uppercase">or</span>
+          <span style="flex:1;height:1px;background:var(--border)"></span></div>`;
       }
-    } else if (usePassword) {
       html += passwordFormHTML();
-    } else {
+    }
+
+    if (!useClerk && !usePassword) {
       html += `<div class="login-hint">
         No sign-in method is configured. Set <code>ADMIN_PASSWORD</code>, or
         configure Clerk, then restart the server.</div>`;
     }
 
     html += `<div class="login-hint">
-      Only addresses on the admin list can open this dashboard.
-    </div>`;
+      Only addresses on the admin list can open this dashboard.</div>`;
 
     panel.innerHTML = html;
     $('#clerkSignIn')?.addEventListener('click', openClerkSignIn);
+    $('#clerkRetry')?.addEventListener('click', startClerk);
     wirePasswordForm();
   }
 
   function passwordFormHTML() {
     return `
       <div class="field"><label for="email">Email</label>
-        <input id="email" type="email" autocomplete="username"
-               value="${esc(cfg.adminHint || '')}"></div>
+        <input id="email" type="email" autocomplete="username"></div>
       <div class="field"><label for="password">Password</label>
         <input id="password" type="password" autocomplete="current-password"></div>
       <div id="loginError" style="display:none;color:var(--red-500);font-size:var(--fs-xs);
            margin-bottom:var(--space-4)"></div>
-      <button class="btn btn--primary btn--block" type="button" id="pwSignIn">Sign in with password</button>`;
+      <button class="btn btn--primary btn--block" type="button" id="pwSignIn">Sign in</button>`;
   }
 
   function wirePasswordForm() {
@@ -315,11 +343,693 @@
       showApp(r.user);
     } catch (e) {
       if (err) { err.textContent = e.message; err.style.display = 'block'; }
-    } finally {
       btn.disabled = false;
-      btn.textContent = 'Sign in with password';
+      btn.textContent = 'Sign in';
     }
   }
+
+  $('#loginForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if ($('#pwSignIn')) doPasswordLogin();
+  });
+
+  $('#logoutBtn')?.addEventListener('click', signOut);
+
+  /* ---------------------------------------------------- routing -- */
+  $$('.side nav button').forEach(b => b.addEventListener('click', () => {
+    $$('.side nav button').forEach(x => x.classList.toggle('is-active', x === b));
+    $$('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== b.dataset.view; });
+  }));
+
+  /* ---------------------------------------------------- overview -- */
+  function renderStats(s) {
+    /* Compare the last 7 days against the 7 before, so the KPIs say
+       whether things are moving rather than just where they stand. */
+    const days = s.daily || [];
+    const last7 = days.slice(-7).reduce((a, d) => a + Number(d.revenue), 0);
+    const prev7 = days.slice(-14, -7).reduce((a, d) => a + Number(d.revenue), 0);
+    const delta = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : null;
+
+    const trend = (pct) => {
+      if (pct === null) return `<span class="kpi__trend kpi__trend--flat">no earlier data</span>`;
+      const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+      const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '—';
+      return `<span class="kpi__trend kpi__trend--${dir}">${arrow} ${Math.abs(pct)}% vs previous week</span>`;
+    };
+
+    $('#kpis').innerHTML = `
+      <div class="kpi"><span>Revenue</span><strong>${inr(s.revenue)}</strong>
+        ${trend(delta)}</div>
+      <div class="kpi kpi--info"><span>Average order</span><strong>${inr(s.aov)}</strong>
+        <em>${s.orders} orders all time</em></div>
+      <div class="kpi ${s.pending > 0 ? 'kpi--warn' : 'kpi--good'}"><span>Needs action</span>
+        <strong>${s.pending}</strong><em>placed or packed</em></div>
+      <div class="kpi kpi--good"><span>Customers</span><strong>${s.customers ?? 0}</strong>
+        <em>${s.subscribers} on the mailing list</em></div>`;
+
+    if (s.pending > 0) { $('#pillOrders').hidden = false; $('#pillOrders').textContent = s.pending; }
+    else $('#pillOrders').hidden = true;
+    if (s.unread > 0) { $('#pillMsgs').hidden = false; $('#pillMsgs').textContent = s.unread; }
+    else $('#pillMsgs').hidden = true;
+
+    /* revenue chart */
+    const peak = Math.max(1, ...days.map(d => Number(d.revenue)));
+    $('#chart').innerHTML = days.length
+      ? days.map(d => {
+          const day = d.day.slice(8) + '/' + d.day.slice(5, 7);
+          return `<div class="chart__bar" style="height:${Math.max(3, (Number(d.revenue) / peak) * 100)}%"
+                       data-label="${day}"><span>${inr(d.revenue)} · ${d.orders} orders</span></div>`;
+        }).join('')
+      : `<p class="tbl__sub">No orders yet. Place one on the storefront and it appears here.</p>`;
+
+    /* order status funnel */
+    const byStatus = {};
+    (s.byStatus || []).forEach(x => { byStatus[x.status] = Number(x.n); });
+    const maxN = Math.max(1, ...Object.values(byStatus));
+    const ORDER = ['placed', 'packed', 'shipped', 'delivered', 'cancelled'];
+    $('#funnel').innerHTML = ORDER.map(st => {
+      const n = byStatus[st] || 0;
+      return `<div class="funnel__row">
+        <span class="funnel__label">${st}</span>
+        <div class="funnel__bar"><div class="funnel__fill funnel__fill--${st}"
+             style="width:${(n / maxN) * 100}%"></div></div>
+        <span class="funnel__n">${n}</span>
+      </div>`;
+    }).join('');
+
+    /* best sellers with a mini bar for share of units */
+    const top = s.topProducts || [];
+    const topMax = Math.max(1, ...top.map(p => Number(p.units)));
+    $('#topProducts').innerHTML = top.length
+      ? top.map(p => `<tr>
+          <td><span class="tbl__name">${esc(p.name)}</span>
+            <div class="tbl__sub">${inr(p.revenue)} revenue</div></td>
+          <td style="width:110px"><div class="funnel__bar" style="height:8px">
+            <div class="funnel__fill funnel__fill--delivered"
+                 style="width:${(Number(p.units) / topMax) * 100}%"></div></div></td>
+          <td class="num">${p.units}</td></tr>`).join('')
+      : `<tr><td class="tbl__sub">Nothing sold yet.</td></tr>`;
+
+    /* low stock */
+    $('#lowStock').innerHTML = (s.lowStock || []).length
+      ? s.lowStock.map(p => `<tr>
+          <td><span class="tbl__name">${esc(p.name)}</span></td>
+          <td class="num"><span class="tag ${p.stock <= 3 ? 'tag--low' : 'tag--ok'}">${p.stock} left</span></td>
+          <td class="num"><button class="link-btn" data-edit="${esc(p.slug)}">Restock</button></td>
+          </tr>`).join('')
+      : `<tr><td class="tbl__sub">Every product is above ten units.</td></tr>`;
+
+    renderFeed();
+  }
+
+  /** Recent activity, assembled from orders and messages already in cache. */
+  function renderFeed() {
+    const host = $('#feed');
+    if (!host) return;
+
+    const events = [];
+    cache.orders.slice(0, 6).forEach(o => events.push({
+      at: o.created_at, icon: 'bag',
+      title: `${o.first_name} ${o.last_name} ordered ${inr(o.total)}`,
+      sub: `${o.ref} · ${o.items.length} item${o.items.length === 1 ? '' : 's'} · ${o.city}`,
+    }));
+    cache.messages.slice(0, 4).forEach(m => events.push({
+      at: m.created_at, icon: 'mail',
+      title: `${m.name} sent an enquiry`,
+      sub: m.subject || 'General',
+    }));
+
+    events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
+    const ICONS = {
+      bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/>',
+      mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
+    };
+
+    host.innerHTML = events.length
+      ? `<div class="feed">${events.slice(0, 8).map(e => `
+          <div class="feed__item">
+            <span class="feed__dot"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.6">${ICONS[e.icon]}</svg></span>
+            <div class="feed__body">
+              <strong>${esc(e.title)}</strong>
+              <div>${esc(e.sub)} · ${when(e.at)}</div>
+            </div>
+          </div>`).join('')}</div>`
+      : `<p class="tbl__sub">Nothing has happened yet.</p>`;
+  }
+
+  /* ------------------------------------------------------ orders -- */
+  function renderOrders() {
+    const q = $('#orderSearch').value.toLowerCase();
+    const st = $('#orderStatus').value;
+    const list = cache.orders.filter(o =>
+      (st === 'all' || o.status === st) &&
+      (!q || (o.ref + o.email + o.first_name + o.last_name).toLowerCase().includes(q)));
+
+    $('#ordersBody').innerHTML = list.length ? list.map(o => `
+      <tr data-open-order="${esc(o.ref)}" style="cursor:pointer">
+        <td><span class="tbl__name">${esc(o.ref)}</span></td>
+        <td>${esc(o.first_name)} ${esc(o.last_name)}<div class="tbl__sub">${esc(o.email)}<br>${esc(o.city)} ${esc(o.pincode)}</div></td>
+        <td class="tbl__sub">${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join('<br>')}</td>
+        <td class="num">${inr(o.total)}</td>
+        <td>
+          <select class="status-select" data-order="${esc(o.ref)}">
+            ${['placed','packed','shipped','delivered','cancelled'].map(s =>
+              `<option value="${s}"${o.status === s ? ' selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}
+          </select>
+          <div style="margin-top:6px"><span class="tag tag--${esc(o.status)}">${esc(o.status)}</span></div>
+        </td>
+        <td class="tbl__sub">${when(o.created_at)}</td>
+      </tr>`).join('')
+      : `<tr><td colspan="6"><div class="state"><h3>No orders here</h3>
+           <p>Place a test order on the storefront and refresh.</p></div></td></tr>`;
+  }
+
+  $('#ordersBody')?.addEventListener('click', (e) => {
+    if (e.target.closest('select')) return;   // status dropdown handles itself
+    const row = e.target.closest('[data-open-order]');
+    if (row) openOrder(row.dataset.openOrder);
+  });
+
+  $('#ordersBody')?.addEventListener('change', async (e) => {
+    const sel = e.target.closest('[data-order]');
+    if (!sel) return;
+    const ref = sel.dataset.order;
+    const prev = cache.orders.find(o => o.ref === ref)?.status;
+    try {
+      await api(`/api/admin/orders/${ref}`, { method: 'PATCH', body: { status: sel.value } });
+      const o = cache.orders.find(x => x.ref === ref);
+      if (o) o.status = sel.value;
+      renderOrders();
+      loadStats();
+    } catch (err) {
+      alert(err.message);
+      sel.value = prev;
+    }
+  });
+
+  $('#orderSearch')?.addEventListener('input', renderOrders);
+  $('#orderStatus')?.addEventListener('change', renderOrders);
+
+  /* ---------------------------------------------------- products -- */
+  function renderProducts() {
+    const q = $('#productSearch').value.toLowerCase();
+    const list = cache.products.filter(p => !q || (p.name + p.cat + p.metal).toLowerCase().includes(q));
+
+    $('#productsBody').innerHTML = list.length ? list.map(p => `
+      <tr>
+        <td><img class="tbl__thumb" src="../${esc(p.img)}" alt=""></td>
+        <td><span class="tbl__name">${esc(p.name)}</span><div class="tbl__sub">${esc(p.slug)}</div></td>
+        <td class="tbl__sub">${esc(p.cat)}<br>${esc(p.metal)}
+          <div style="margin-top:4px">${(p.swatches || []).map(sw =>
+            `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;
+              background:${sw.color};border:1px solid rgba(0,0,0,.12);margin-right:3px"></i>`).join('')}</div>
+          <div style="margin-top:2px">${(p.occasion || []).join(', ')}</div></td>
+        <td class="num">${inr(p.price)}</td>
+        <td class="num tbl__sub">${inr(p.mrp)}</td>
+        <td class="num"><span class="tag ${p.stock <= 10 ? 'tag--low' : 'tag--ok'}">${p.stock}</span></td>
+        <td>
+          <button class="link-btn" data-edit="${esc(p.slug)}">Edit</button>
+          <button class="link-btn link-btn--danger" data-archive="${esc(p.slug)}" style="margin-left:var(--space-3)">Archive</button>
+        </td>
+      </tr>`).join('')
+      : `<tr><td colspan="7"><div class="state"><h3>No products match</h3></div></td></tr>`;
+  }
+
+  $('#productSearch')?.addEventListener('input', renderProducts);
+
+  const scrim = $('#productScrim');
+
+  /* ------------------------------------------- editor rendering -- */
+  function renderImagePicker() {
+    const host = $('#imgGrid');
+    if (!cache.images.length) {
+      host.innerHTML = '<p class="tbl__sub">Loading artwork…</p>';
+      return;
+    }
+    host.innerHTML = cache.images.map(im => `
+      <button type="button" class="img-opt ${draft.img === im.file ? 'is-active' : ''}"
+              data-img="${esc(im.file)}" data-alt="${esc(im.alt)}" title="${esc(im.label)}">
+        <img src="../${esc(im.file)}" alt="${esc(im.label)}" loading="lazy">
+      </button>`).join('');
+  }
+
+  function renderOccasions() {
+    $('#occRow').innerHTML = OCCASIONS.map(o => `
+      <button type="button" class="chip-toggle" data-occ="${o}"
+              aria-pressed="${draft.occasion.includes(o)}">${o}</button>`).join('');
+  }
+
+  function renderFinishes() {
+    $('#swatchRow').innerHTML = FINISHES.map(f => `
+      <button type="button" class="swatch-toggle" data-finish="${f.key}"
+              aria-pressed="${draft.swatches.some(s => s.key === f.key)}">
+        <i style="background:${f.color}"></i>${f.label}</button>`).join('');
+  }
+
+  /** Live card preview, so the admin sees the shop's view while editing. */
+  function renderPreview() {
+    const price = Number($('#pPrice').value) || 0;
+    const mrp = Number($('#pMrp').value) || 0;
+    const badge = $('#pBadge').value;
+
+    $('#pvImg').src = draft.img ? '../' + draft.img : '';
+    $('#pvCat').textContent = $('#pCat').value;
+    $('#pvName').textContent = $('#pName').value || 'Piece name';
+    $('#pvPrice').textContent = inr(price);
+    $('#pvMrp').textContent = mrp > price ? inr(mrp) : '';
+    $('#pvOff').textContent = mrp > price ? Math.round(((mrp - price) / mrp) * 100) + '% off' : '';
+    $('#pvBadge').hidden = !badge;
+    $('#pvBadge').textContent = badge;
+    $('#pvDots').innerHTML = draft.swatches
+      .map(sw => `<i style="background:${sw.color}"></i>`).join('');
+  }
+
+  /* Any edit refreshes the preview. */
+  ['#pName', '#pCat', '#pPrice', '#pMrp', '#pBadge'].forEach(sel => {
+    const el = $(sel);
+    if (!el) return;               // absent on the login page
+    el.addEventListener('input', renderPreview);
+    el.addEventListener('change', renderPreview);
+  });
+
+  /* Typing a name suggests a slug, until the admin edits the slug themselves. */
+  let slugTouched = false;
+  $('#pSlug')?.addEventListener('input', () => { slugTouched = true; });
+  $('#pName')?.addEventListener('input', () => {
+    if (slugTouched || $('#pSlug').readOnly) return;
+    $('#pSlug').value = $('#pName').value.toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  });
+
+  $('#imgGrid')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-img]');
+    if (!b) return;
+    draft.img = b.dataset.img;
+    draft.imgAlt = b.dataset.alt;
+    renderImagePicker();
+    renderPreview();
+  });
+
+  $('#occRow')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-occ]');
+    if (!b) return;
+    const o = b.dataset.occ;
+    draft.occasion = draft.occasion.includes(o)
+      ? draft.occasion.filter(x => x !== o)
+      : [...draft.occasion, o];
+    renderOccasions();
+  });
+
+  $('#swatchRow')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-finish]');
+    if (!b) return;
+    const f = FINISHES.find(x => x.key === b.dataset.finish);
+    draft.swatches = draft.swatches.some(s => s.key === f.key)
+      ? draft.swatches.filter(s => s.key !== f.key)
+      : [...draft.swatches, f];
+    renderFinishes();
+    renderPreview();
+  });
+
+  function openProduct(slug) {
+    const p = slug ? cache.products.find(x => x.slug === slug) : null;
+    slugTouched = !!p;
+
+    $('#productModalTitle').textContent = p ? `Edit ${p.name}` : 'Add a jewellery piece';
+    $('#pSlug').value = p ? p.slug : '';
+    $('#pSlug').readOnly = !!p;
+    $('#pName').value = p ? p.name : '';
+    $('#pCat').value = p ? p.cat : 'Necklace Sets';
+    $('#pMetal').value = p ? p.metal : 'Gold';
+    $('#pPrice').value = p ? p.price : '';
+    $('#pMrp').value = p ? p.mrp : '';
+    $('#pStock').value = p ? p.stock : 25;
+    $('#pBadge').value = p && p.badge ? p.badge : '';
+    $('#pBlurb').value = p ? (p.blurb || '') : '';
+
+    draft.img = p ? p.img : (cache.images[0] ? cache.images[0].file : null);
+    draft.imgAlt = p ? p.imgAlt : (cache.images[0] ? cache.images[0].alt : null);
+    draft.occasion = p && p.occasion.length ? [...p.occasion] : ['Everyday'];
+    draft.swatches = p && p.swatches.length ? [...p.swatches] : [FINISHES[0]];
+
+    $('#productError').style.display = 'none';
+    $$('.field--error', scrim).forEach(f => f.classList.remove('field--error'));
+
+    renderImagePicker();
+    renderOccasions();
+    renderFinishes();
+    renderPreview();
+    scrim.classList.add('is-open');
+  }
+
+  const closeProduct = () => scrim && scrim.classList.remove('is-open');
+
+  $('#newProductBtn')?.addEventListener('click', () => openProduct(null));
+  $('#cancelProduct')?.addEventListener('click', closeProduct);
+  scrim?.addEventListener('click', e => { if (e.target === scrim) closeProduct(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && scrim && scrim.classList.contains('is-open')) closeProduct();
+  });
+
+  $('#productsBody')?.addEventListener('click', async (e) => {
+    const edit = e.target.closest('[data-edit]');
+    if (edit) return openProduct(edit.dataset.edit);
+
+    const arch = e.target.closest('[data-archive]');
+    if (arch) {
+      const p = cache.products.find(x => x.slug === arch.dataset.archive);
+      if (!confirm(`Archive "${p ? p.name : arch.dataset.archive}"? It disappears from the storefront.`)) return;
+      try {
+        await api(`/api/admin/products/${arch.dataset.archive}`, { method: 'DELETE' });
+        await loadProducts();
+        loadStats();
+      } catch (err) { alert(err.message); }
+    }
+  });
+
+  // Low-stock "Restock" buttons on the overview open the same editor.
+  $('#lowStock')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-edit]');
+    if (b) {
+      document.querySelector('.side nav button[data-view="products"]').click();
+      openProduct(b.dataset.edit);
+    }
+  });
+
+  $('#productForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('#productError');
+    err.style.display = 'none';
+
+    const body = {
+      slug: $('#pSlug').value.trim().toLowerCase(),
+      name: $('#pName').value.trim(),
+      cat: $('#pCat').value,
+      metal: $('#pMetal').value,
+      price: Number($('#pPrice').value),
+      mrp: Number($('#pMrp').value),
+      stock: Number($('#pStock').value),
+      badge: $('#pBadge').value || null,
+      blurb: $('#pBlurb').value.trim(),
+      img: draft.img,
+      imgAlt: draft.imgAlt,
+      occasion: draft.occasion,
+      swatches: draft.swatches,
+    };
+
+    let ok = true;
+    const flag = (sel, bad) => {
+      const field = $(sel).closest('.field');
+      if (field) field.classList.toggle('field--error', bad);
+      if (bad) ok = false;
+    };
+    flag('#pSlug', !/^[a-z0-9-]+$/.test(body.slug));
+    flag('#pName', !body.name);
+    flag('#pPrice', !(body.price > 0));
+    flag('#pMrp', !(body.mrp >= body.price));
+
+    // These live outside .field wrappers, so flag their containers directly.
+    $('#occRow').closest('.field').classList.toggle('field--error', !body.occasion.length);
+    $('#swatchRow').closest('.field').classList.toggle('field--error', !body.swatches.length);
+    if (!body.occasion.length || !body.swatches.length) ok = false;
+
+    if (!ok) return;
+
+    try {
+      await api('/api/admin/products', { method: 'POST', body });
+      closeProduct();
+      await loadProducts();
+      loadStats();
+    } catch (e2) {
+      err.textContent = e2.message;
+      err.style.display = 'block';
+    }
+  });
+
+  function renderMessages() {
+    $('#messagesBody').innerHTML = cache.messages.length ? cache.messages.map(m => `
+      <div class="msg${m.handled ? ' is-handled' : ''}">
+        <div class="msg__head">
+          <strong>${esc(m.name)}</strong>
+          <span>${esc(m.email)}</span>
+          ${m.order_ref ? `<span class="tag tag--placed">${esc(m.order_ref)}</span>` : ''}
+          <span>${esc(m.subject || 'General')}</span>
+          <span style="margin-left:auto">${when(m.created_at)}</span>
+          <button class="link-btn" data-handled="${esc(m.id)}" data-to="${m.handled ? 0 : 1}">
+            ${m.handled ? 'Reopen' : 'Mark handled'}</button>
+        </div>
+        <p class="msg__body">${esc(m.body)}</p>
+      </div>`).join('')
+      : `<div class="state"><h3>No messages</h3><p>Enquiries from the contact form land here.</p></div>`;
+  }
+
+  $('#messagesBody')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-handled]');
+    if (!b) return;
+    try {
+      await api(`/api/admin/messages/${b.dataset.handled}`, {
+        method: 'PATCH', body: { handled: b.dataset.to === '1' },
+      });
+      await loadMessages();
+      loadStats();
+    } catch (err) { alert(err.message); }
+  });
+
+  /* ---------------------------------------------------- customers -- */  /* ---------------------------------------------------- customers -- */
+  function renderCustomers() {
+    const q = $('#customerSearch').value.toLowerCase();
+    const type = $('#customerType').value;
+
+    const rows = [];
+    if (type !== 'guest') {
+      cache.customers.forEach(c => rows.push({
+        name: [c.first_name, c.last_name].filter(Boolean).join(' ') || '—',
+        email: c.email, phone: c.phone, orders: Number(c.orders) || 0,
+        spent: Number(c.spent) || 0, last: c.last_order, account: true,
+      }));
+    }
+    if (type !== 'account') {
+      cache.guests.forEach(g => rows.push({
+        name: [g.first_name, g.last_name].filter(Boolean).join(' ') || '—',
+        email: g.email, phone: g.phone, orders: Number(g.orders) || 0,
+        spent: Number(g.spent) || 0, last: g.last_order, account: false, city: g.city,
+      }));
+    }
+
+    const list = rows
+      .filter(r => !q || (r.name + r.email).toLowerCase().includes(q))
+      .sort((a, b) => b.spent - a.spent);
+
+    $('#customersBody').innerHTML = list.length ? list.map(c => `
+      <tr>
+        <td><span class="tbl__name">${esc(c.name)}</span>
+          <div class="tbl__sub">
+            <span class="tag ${c.account ? 'tag--delivered' : 'tag--placed'}">
+              ${c.account ? 'Account' : 'Guest'}</span></div></td>
+        <td class="tbl__sub">${esc(c.email)}${c.phone ? '<br>' + esc(c.phone) : ''}</td>
+        <td class="num">${c.orders}</td>
+        <td class="num">${inr(c.spent)}</td>
+        <td class="tbl__sub">${c.last ? when(c.last) : 'never'}</td>
+        <td><button class="link-btn" data-cust-orders="${esc(c.email)}">View orders</button></td>
+      </tr>`).join('')
+      : `<tr><td colspan="6"><div class="state"><h3>No customers yet</h3>
+           <p>They appear here after the first order or sign-up.</p></div></td></tr>`;
+  }
+
+  $('#customerSearch')?.addEventListener('input', renderCustomers);
+  $('#customerType')?.addEventListener('change', renderCustomers);
+
+  // "View orders" jumps to the Orders panel pre-filtered to that person.
+  $('#customersBody')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-cust-orders]');
+    if (!b) return;
+    $('#orderSearch').value = b.dataset.custOrders;
+    $('#orderStatus').value = 'all';
+    document.querySelector('.side nav button[data-view="orders"]').click();
+    renderOrders();
+  });
+
+  /* ------------------------------------------------------- admins -- */
+  function renderAdmins() {
+    $('#adminsBody').innerHTML = cache.admins.length ? cache.admins.map(a => `
+      <tr>
+        <td><span class="tbl__name">${esc(a.email)}</span></td>
+        <td class="tbl__sub">${esc(a.name || '—')}</td>
+        <td><span class="tag ${a.role === 'owner' ? 'tag--delivered' : 'tag--shipped'}">
+          ${esc(a.role || 'manager')}</span></td>
+        <td class="tbl__sub">${a.clerk_user_id ? 'signed in before' : 'not yet'}</td>
+        <td class="tbl__sub">${when(a.created_at)}</td>
+        <td>${cache.admins.length > 1
+          ? `<button class="link-btn link-btn--danger" data-rm-admin="${esc(a.email)}">Remove</button>`
+          : '<span class="tbl__sub">last admin</span>'}</td>
+      </tr>`).join('')
+      : `<tr><td colspan="6"><div class="state"><h3>No administrators</h3>
+           <p>Set ADMIN_EMAIL on the server and restart.</p></div></td></tr>`;
+  }
+
+  const adminScrim = $('#adminScrim');
+  $('#newAdminBtn')?.addEventListener('click', () => {
+    $('#aEmail').value = ''; $('#aName').value = ''; $('#aRole').value = 'manager';
+    $('#adminError').style.display = 'none';
+    $$('.field--error', adminScrim).forEach(f => f.classList.remove('field--error'));
+    adminScrim.classList.add('is-open');
+  });
+  $('#cancelAdmin')?.addEventListener('click', () => adminScrim.classList.remove('is-open'));
+  adminScrim?.addEventListener('click', e => { if (e.target === adminScrim) adminScrim.classList.remove('is-open'); });
+
+  $('#adminForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = $('#aEmail').value.trim().toLowerCase();
+    const bad = !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    $('#aEmail').closest('.field').classList.toggle('field--error', bad);
+    if (bad) return;
+    try {
+      await api('/api/admin/admins', { method: 'POST',
+        body: { email, name: $('#aName').value.trim(), role: $('#aRole').value } });
+      adminScrim.classList.remove('is-open');
+      await loadAdmins();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+      $('#adminError').style.display = 'block';
+    }
+  });
+
+  $('#adminsBody')?.addEventListener('click', async e => {
+    const b = e.target.closest('[data-rm-admin]');
+    if (!b) return;
+    if (!confirm(`Remove ${b.dataset.rmAdmin}? They lose dashboard access immediately.`)) return;
+    try {
+      await api(`/api/admin/admins/${encodeURIComponent(b.dataset.rmAdmin)}`, { method: 'DELETE' });
+      await loadAdmins();
+    } catch (err) { alert(err.message); }
+  });
+
+  /* -------------------------------------------------- order drawer -- */
+  const orderScrim = $('#orderScrim');
+  const closeOrderDrawer = () => {
+    if (!orderScrim) return;
+    orderScrim.classList.remove('is-open');
+    $('#orderDrawer')?.classList.remove('is-open');
+    document.body.style.overflow = '';
+  };
+  $('#closeOrder')?.addEventListener('click', closeOrderDrawer);
+  orderScrim?.addEventListener('click', closeOrderDrawer);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOrderDrawer(); });
+
+  async function openOrder(ref) {
+    if (!orderScrim) return;
+    orderScrim.classList.add('is-open');
+    $('#orderDrawer')?.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    $('#orderDrawerTitle').textContent = ref;
+    $('#orderDrawerBody').innerHTML = '<p class="tbl__sub">Loading…</p>';
+    $('#orderDrawerFoot').innerHTML = '';
+
+    try {
+      const o = await api(`/api/admin/orders/${ref}`);
+      const items = o.items || [];
+      $('#orderDrawerBody').innerHTML = `
+        <p class="eyebrow">${esc(o.status)}</p>
+        <h3 style="font-family:var(--font-display);font-size:var(--fs-h3)">${inr(o.total)}</h3>
+        <div class="tbl__sub" style="margin-bottom:var(--space-6)">Placed ${when(o.created_at)}</div>
+
+        <h4 style="font-size:var(--fs-eyebrow);letter-spacing:var(--ls-wider);text-transform:uppercase;
+                   color:var(--text-muted);margin-bottom:var(--space-3)">Items</h4>
+        ${items.map(i => `<div class="line" style="grid-template-columns:1fr auto">
+          <div><span class="line__name">${esc(i.name)}</span>
+            <div class="line__variant">${esc(i.finish || '')} · qty ${i.qty} · ${inr(i.unit_price)} each</div></div>
+          <div class="line__price">${inr(i.line_total)}</div>
+        </div>`).join('')}
+
+        <h4 style="font-size:var(--fs-eyebrow);letter-spacing:var(--ls-wider);text-transform:uppercase;
+                   color:var(--text-muted);margin:var(--space-6) 0 var(--space-3)">Deliver to</h4>
+        <table class="spec-table">
+          <tr><td>Name</td><td>${esc(o.first_name)} ${esc(o.last_name)}</td></tr>
+          <tr><td>Email</td><td>${esc(o.email)}</td></tr>
+          <tr><td>Phone</td><td>${esc(o.phone)}</td></tr>
+          <tr><td>Address</td><td>${esc(o.address)}</td></tr>
+          <tr><td>City</td><td>${esc(o.city)} ${esc(o.pincode)}</td></tr>
+          <tr><td>Payment</td><td>${esc(o.payment)}</td></tr>
+          <tr><td>Account</td><td>${o.clerk_user_id ? 'signed in' : 'guest checkout'}</td></tr>
+        </table>
+
+        <div class="totals" style="margin-top:var(--space-6)">
+          <div><span>Subtotal</span><span>${inr(o.subtotal)}</span></div>
+          <div><span>Shipping</span><span>${o.shipping === 0 ? 'Free' : inr(o.shipping)}</span></div>
+          <div class="is-total"><span>Total</span><span>${inr(o.total)}</span></div>
+        </div>`;
+
+      $('#orderDrawerFoot').innerHTML = `
+        <label style="display:block;font-size:var(--fs-eyebrow);letter-spacing:var(--ls-wider);
+                      text-transform:uppercase;color:var(--text-muted);margin-bottom:var(--space-3)">
+          Update status</label>
+        <select class="select" id="drawerStatus" style="width:100%">
+          ${['placed','packed','shipped','delivered','cancelled'].map(st =>
+            `<option value="${st}"${o.status === st ? ' selected' : ''}>${st[0].toUpperCase() + st.slice(1)}</option>`).join('')}
+        </select>`;
+
+      $('#drawerStatus')?.addEventListener('change', async ev => {
+        try {
+          await api(`/api/admin/orders/${ref}`, { method: 'PATCH', body: { status: ev.target.value } });
+          const row = cache.orders.find(x => x.ref === ref);
+          if (row) row.status = ev.target.value;
+          renderOrders();
+          loadStats();
+        } catch (err) { alert(err.message); }
+      });
+    } catch (e) {
+      $('#orderDrawerBody').innerHTML = `<p class="tbl__sub">Could not load: ${esc(e.message)}</p>`;
+    }
+  }
+
+  /* -------------------------------------------------- subscribers -- */
+  function renderSubs() {
+    $('#subsBody').innerHTML = cache.subs.length
+      ? cache.subs.map(s => `<tr><td>${esc(s.email)}</td><td class="tbl__sub">${when(s.created_at)}</td></tr>`).join('')
+      : `<tr><td colspan="2"><div class="state"><h3>No subscribers yet</h3></div></td></tr>`;
+  }
+
+  $('#exportSubs')?.addEventListener('click', () => {
+    if (!cache.subs.length) return alert('Nothing to export yet.');
+    const csv = 'email,joined\n' + cache.subs.map(s => `${s.email},${s.created_at}`).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'aurelle-subscribers.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  /* -------------------------------------------------------- load -- */
+  async function loadStats()    { renderStats(await api('/api/admin/stats')); }
+  async function loadOrders()   { cache.orders = (await api('/api/admin/orders')).orders; renderOrders(); renderFeed(); }
+  async function loadProducts() { cache.products = (await api('/api/admin/products')).products; renderProducts(); }
+  async function loadImages() {
+    try { cache.images = (await api('/api/admin/images')).images || []; }
+    catch (e) { cache.images = []; }
+  }
+  async function loadMessages() { cache.messages = (await api('/api/admin/messages')).messages; renderMessages(); renderFeed(); }
+  async function loadSubs()     { cache.subs = (await api('/api/admin/subscribers')).subscribers; renderSubs(); }
+  async function loadCustomers() {
+    const r = await api('/api/admin/customers');
+    cache.customers = r.customers || []; cache.guests = r.guests || [];
+    renderCustomers();
+  }
+  async function loadAdmins()   { cache.admins = (await api('/api/admin/admins')).admins; renderAdmins(); }
+
+  async function loadAll() {
+    try {
+      await Promise.all([loadStats(), loadOrders(), loadProducts(), loadMessages(),
+                         loadSubs(), loadCustomers(), loadAdmins(), loadImages()]);
+    } catch (e) {
+      console.error(e);
+      if (token) alert(`Could not load dashboard data: ${e.message}`);
+    }
+  }
+
+  $('#refreshBtn')?.addEventListener('click', loadAll);
 
   /** Load and start Clerk, updating the login panel as it goes. */
   async function startClerk() {
@@ -355,7 +1065,7 @@
         try {
           const me = await api('/api/auth/me');
           showApp(me.user);
-        } catch (e) { /* handled */ }
+        } catch (e) { /* showDenied or showBlocked has painted the reason */ }
       } else if (pendingSignIn) {
         // They clicked while we were still loading — honour it now.
         pendingSignIn = false;
@@ -376,16 +1086,32 @@
 
     renderLogin();
 
-    // A stored password session takes precedence and needs no Clerk at all.
     if (token) {
       try {
         const me = await api('/api/auth/me');
         return showApp(me.user);
-      } catch (e) { token = null; try { sessionStorage.removeItem(TOKEN_KEY); } catch (e2) {} }
+      } catch (e) {
+        token = null;
+        try { sessionStorage.removeItem(TOKEN_KEY); } catch (e2) {}
+        if (PAGE === 'dashboard') return bounceToLogin();
+        renderLogin();
+      }
     }
 
     if (cfg.auth === 'clerk' && cfg.clerk && cfg.clerk.enabled) {
-      startClerk();
+      await startClerk();
+      // On the dashboard page a Clerk session may still be resolving; if it
+      // never arrives, send them to the login page rather than showing an
+      // empty shell.
+      if (PAGE === 'dashboard' && !(clerk && clerk.user)) {
+        setTimeout(() => {
+          if (!(clerk && clerk.user) && !token) bounceToLogin();
+        }, 2500);
+      }
+      return;
     }
+
+    // No sign-in method resolved at all.
+    if (PAGE === 'dashboard') bounceToLogin();
   })();
 })();
