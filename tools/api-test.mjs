@@ -5,8 +5,8 @@
  */
 const PORT = process.env.TEST_PORT || 3901;
 process.env.PORT = String(PORT);
-process.env.ADMIN_EMAIL = 'admin@aurelle.local';
-process.env.ADMIN_PASSWORD = 'aurelle-admin';
+process.env.ADMIN_EMAIL = 'vhoratanvir1610@gmail.com';
+process.env.ADMIN_PASSWORD = 'Aurelle@2026';
 
 await import('../server/server.js');
 await new Promise(r => setTimeout(r, 600));
