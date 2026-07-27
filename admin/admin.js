@@ -246,9 +246,36 @@
   $('#logoutBtn').addEventListener('click', signOut);
 
   /* ---------------------------------------------------- routing -- */
+  const sideNav = $('#sideNav');
+  const sideScrim = $('#sideScrim');
+  const menuBtn = $('#mobileMenuBtn');
+  const mobileTitle = $('#mobileTopbarTitle');
+
+  function closeMobileNav() {
+    if (!sideNav) return;
+    sideNav.classList.remove('is-open');
+    sideScrim.classList.remove('is-open');
+    menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  function openMobileNav() {
+    if (!sideNav) return;
+    sideNav.classList.add('is-open');
+    sideScrim.classList.add('is-open');
+    menuBtn.setAttribute('aria-expanded', 'true');
+  }
+  if (menuBtn) {
+    menuBtn.addEventListener('click', () => {
+      sideNav.classList.contains('is-open') ? closeMobileNav() : openMobileNav();
+    });
+    sideScrim.addEventListener('click', closeMobileNav);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMobileNav(); });
+  }
+
   $$('.side nav button').forEach(b => b.addEventListener('click', () => {
     $$('.side nav button').forEach(x => x.classList.toggle('is-active', x === b));
     $$('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== b.dataset.view; });
+    if (mobileTitle) mobileTitle.textContent = b.textContent.trim().replace(/\d+$/, '').trim();
+    closeMobileNav();
   }));
 
   /* ---------------------------------------------------- overview -- */

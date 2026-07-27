@@ -26,7 +26,17 @@
 <!-- ============================================ APP ============== -->
 <div class="shell" id="appView" hidden>
 
-  <aside class="side">
+  <!-- mobile-only topbar: hamburger + current section title -->
+  <div class="mobile-topbar">
+    <button type="button" class="mobile-topbar__burger" id="mobileMenuBtn" aria-label="Open menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <span class="wordmark mobile-topbar__mark">Aurelle<small>DASHBOARD</small></span>
+    <span class="mobile-topbar__title" id="mobileTopbarTitle">Overview</span>
+  </div>
+  <div class="side-scrim" id="sideScrim"></div>
+
+  <aside class="side" id="sideNav">
     <span class="wordmark">Aurelle<small>DASHBOARD</small></span>
     <nav>
       <button data-view="overview" class="is-active">Overview</button>
