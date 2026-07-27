@@ -196,9 +196,17 @@ export function ensureAdmin() {
      there is no password to set. The password columns are NOT NULL, so we
      store an unusable random value rather than leaving them empty. */
   if (usingClerk && email) {
+    /* Store the real password when one is configured, so the dashboard keeps
+       a password route in even if Clerk is misconfigured or unreachable.
+       With no password set, store an unusable random one. */
+    const { salt, hash } = hashPassword(pass || randomUUID());
     const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
-    if (!existing) {
-      const { salt, hash } = hashPassword(randomUUID());
+    if (existing) {
+      if (pass) {
+        db.prepare('UPDATE admins SET pass_hash = ?, pass_salt = ? WHERE id = ?')
+          .run(hash, salt, existing.id);
+      }
+    } else {
       db.prepare(`INSERT INTO admins (id,email,name,pass_hash,pass_salt,role)
                   VALUES (?,?,?,?,?,?)`)
         .run(randomUUID(), email, 'Store owner', hash, salt, 'owner');

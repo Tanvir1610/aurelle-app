@@ -16,6 +16,7 @@ import * as Clerk from './auth-clerk.js';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3000);
 const SECRET = process.env.SESSION_SECRET || randomBytes(32).toString('hex');
+const PASSWORD_LOGIN = !!process.env.ADMIN_PASSWORD;
 const AUTH_DRIVER = (process.env.AUTH_DRIVER || (Clerk.isConfigured() ? 'clerk' : 'local')).toLowerCase();
 
 /* ============================================================ tokens == */
@@ -75,6 +76,25 @@ async function readBody(req, limit = 1_000_000) {
  * 'local' it is the HMAC token issued by /api/auth/login.
  */
 async function resolveAuth(req) {
+  /* A locally-issued token is always honoured, even when Clerk is the
+     configured driver. This keeps a password route into the dashboard that
+     does not depend on Clerk being reachable or correctly configured. */
+  const header = req.headers.authorization || '';
+  const raw = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (raw) {
+    const local = verify(raw);
+    if (local && local.sub) {
+      /* isAdmin is synchronous on SQLite and a promise on Supabase, so
+         await it inside a try rather than chaining .catch(). */
+      let admin = local;
+      if (DB.isAdmin) {
+        try { admin = await DB.isAdmin({ email: local.email }); }
+        catch (e) { admin = null; }
+      }
+      return { user: local, admin: admin || local };
+    }
+  }
+
   if (AUTH_DRIVER === 'clerk') {
     const who = await Clerk.identify(req);
     if (!who || who.error) return null;
@@ -195,6 +215,12 @@ route('POST', /^\/api\/contact$/, async (req, res) => {
 /* ------------------------------------------------------------ auth --- */
 route('POST', /^\/api\/auth\/login$/, async (req, res) => {
   const { email, password } = await readBody(req);
+  if (!PASSWORD_LOGIN) {
+    return bad(res, 'Password sign-in is off. Set ADMIN_PASSWORD to enable it.', 400);
+  }
+  if (!DB.db) {
+    return bad(res, 'Password sign-in needs DB_DRIVER=sqlite.', 400);
+  }
   const admin = DB.db.prepare('SELECT * FROM admins WHERE email = ?')
     .get(String(email || '').toLowerCase().trim());
   if (!admin || !DB.verifyPassword(String(password || ''), admin.pass_salt, admin.pass_hash)) {
@@ -220,6 +246,7 @@ route('GET', /^\/api\/config$/, async (req, res) => {
 
   ok(res, {
     auth: AUTH_DRIVER,
+    passwordLogin: PASSWORD_LOGIN && !!DB.db,
     clerk: Clerk.publicConfig(),
     db: DB.DB_DRIVER,
     adminCount,
