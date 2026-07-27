@@ -448,7 +448,24 @@ const server = createServer(async (req, res) => {
       const who = await resolveAuth(req);
       if (!who) return bad(res, 'Sign in required', 401);
       if (r.auth && !who.admin) {
-        return bad(res, 'This account is not an administrator', 403);
+        /* 403, never 401. A 401 tells the dashboard the session is dead and
+           it signs the user out — which turns a configuration problem into an
+           endless sign-in loop. */
+        const u = who.user || {};
+        if (u.profileError) {
+          return json(res, 403, {
+            error: 'Signed in, but your email could not be read from Clerk, ' +
+                   'so administrator access cannot be checked.',
+            detail: u.profileError,
+            fix: 'Check CLERK_SECRET_KEY on the server, or add email_address ' +
+                 'to the session token in Clerk (Sessions → Customize).',
+            userId: u.userId || null,
+          });
+        }
+        return json(res, 403, {
+          error: 'This account is not an administrator',
+          email: u.email || null,
+        });
       }
       user = r.auth ? { ...who.user, admin: who.admin } : who.user;
     }

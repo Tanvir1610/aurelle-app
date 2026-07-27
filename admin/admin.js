@@ -109,12 +109,33 @@
     if (t) headers.authorization = `Bearer ${t}`;
     const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
 
-    if (res.status === 401 && t) { signOut(); throw new Error('Session expired — sign in again'); }
+    /* Under Clerk, a 401 must not sign the user out. Clerk owns the session;
+       a 401 here means our server could not accept the token, which is a
+       server-side configuration problem. Signing out would bounce them back
+       to the login card and loop forever. */
+    if (res.status === 401 && t) {
+      if (cfg.auth === 'clerk') {
+        let detail = '';
+        try { detail = (await res.clone().json()).error || ''; } catch (e) {}
+        showBlocked('Your session was rejected by the server', detail ||
+          'The server could not verify the sign-in token.');
+        throw new Error('Session rejected');
+      }
+      signOut();
+      throw new Error('Session expired — sign in again');
+    }
+
     if (res.status === 403) {
-      const who = cfg.auth === 'clerk' && clerk && clerk.user
-        ? (clerk.user.primaryEmailAddress?.emailAddress || 'This account')
-        : 'This account';
-      showDenied(who);
+      let payload = {};
+      try { payload = await res.clone().json(); } catch (e) {}
+      const who = payload.email ||
+        (clerk && clerk.user && clerk.user.primaryEmailAddress
+          ? clerk.user.primaryEmailAddress.emailAddress : 'This account');
+      if (payload.detail || payload.fix) {
+        showBlocked(payload.error, `${payload.detail || ''}\n${payload.fix || ''}`.trim());
+      } else {
+        showDenied(who);
+      }
       throw new Error('Not an administrator');
     }
     let data = null;
@@ -140,6 +161,31 @@
     $('#loginView').hidden = false;
     $('#loginForm').reset();
     renderLogin();
+  }
+
+  /**
+   * Signed in, but the server will not let us in — and it is a configuration
+   * problem rather than the wrong account. Keep the Clerk session alive so a
+   * retry works the moment the server is fixed.
+   */
+  function showBlocked(title, detail) {
+    $('#appView').hidden = true;
+    $('#loginView').hidden = false;
+    $('#loginPanel').innerHTML = `
+      <h1>${esc(title)}</h1>
+      <p style="font-size:var(--fs-sm);color:var(--text-secondary);line-height:var(--lh-relaxed);
+                white-space:pre-line">${esc(detail || '')}</p>
+      <button class="btn btn--gold btn--block" type="button" id="blockedRetry"
+              style="margin-top:var(--space-5)">Try again</button>
+      <button class="btn btn--ghost btn--block" type="button" id="blockedOut"
+              style="margin-top:var(--space-3)">Sign out</button>`;
+    $('#blockedRetry').addEventListener('click', async () => {
+      try {
+        const me = await api('/api/auth/me');
+        showApp(me.user);
+      } catch (e) { /* the screen has already been repainted */ }
+    });
+    $('#blockedOut').addEventListener('click', signOut);
   }
 
   /** Signed in with Clerk, but not on the admin allow-list. */
@@ -246,36 +292,9 @@
   $('#logoutBtn').addEventListener('click', signOut);
 
   /* ---------------------------------------------------- routing -- */
-  const sideNav = $('#sideNav');
-  const sideScrim = $('#sideScrim');
-  const menuBtn = $('#mobileMenuBtn');
-  const mobileTitle = $('#mobileTopbarTitle');
-
-  function closeMobileNav() {
-    if (!sideNav) return;
-    sideNav.classList.remove('is-open');
-    sideScrim.classList.remove('is-open');
-    menuBtn.setAttribute('aria-expanded', 'false');
-  }
-  function openMobileNav() {
-    if (!sideNav) return;
-    sideNav.classList.add('is-open');
-    sideScrim.classList.add('is-open');
-    menuBtn.setAttribute('aria-expanded', 'true');
-  }
-  if (menuBtn) {
-    menuBtn.addEventListener('click', () => {
-      sideNav.classList.contains('is-open') ? closeMobileNav() : openMobileNav();
-    });
-    sideScrim.addEventListener('click', closeMobileNav);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMobileNav(); });
-  }
-
   $$('.side nav button').forEach(b => b.addEventListener('click', () => {
     $$('.side nav button').forEach(x => x.classList.toggle('is-active', x === b));
     $$('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== b.dataset.view; });
-    if (mobileTitle) mobileTitle.textContent = b.textContent.trim().replace(/\d+$/, '').trim();
-    closeMobileNav();
   }));
 
   /* ---------------------------------------------------- overview -- */

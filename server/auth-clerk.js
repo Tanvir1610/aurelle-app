@@ -168,16 +168,25 @@ export async function identify(req) {
     let lastName = claims.last_name || null;
     let phone = claims.phone_number || null;
 
+    /* Clerk's default session token carries no email, so we ask the Backend
+       API. That needs CLERK_SECRET_KEY — but a bad key must NOT invalidate a
+       session we have already cryptographically verified. Return what the
+       token proves, and report why the profile is missing. */
+    let profileError = null;
     if (!email) {
-      const u = await getUserCached(userId);
-      email = u.email;
-      firstName = u.firstName;
-      lastName = u.lastName;
-      phone = u.phone;
+      try {
+        const u = await getUserCached(userId);
+        email = u.email;
+        firstName = u.firstName;
+        lastName = u.lastName;
+        phone = u.phone;
+      } catch (e) {
+        profileError = e.message;
+      }
     }
 
     return { userId, email: email ? email.toLowerCase() : null,
-             firstName, lastName, phone, claims };
+             firstName, lastName, phone, profileError, claims };
   } catch (e) {
     return { error: e.message };
   }
