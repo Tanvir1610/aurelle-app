@@ -136,7 +136,9 @@ console.log('\n── the dashboard actually fills with data ──────'
      text(doc.querySelector('#whoEmail')));
   t('every panel is present', doc.querySelectorAll('[data-panel]').length === 8,
      String(doc.querySelectorAll('[data-panel]').length));
-  t('the jewellery editor is present', !!doc.querySelector('#imgGrid'));
+  t('the jewellery editor is present', !!doc.querySelector('#pGallery'));
+  t('images are supplied by URL, not a fixed picker',
+     !!doc.querySelector('#pThumb') && !doc.querySelector('#imgGrid'));
   t('no script errors at all', errs.length === 0, errs.slice(0, 3).join(' | '));
 }
 

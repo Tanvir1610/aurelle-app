@@ -328,11 +328,29 @@
         </div>
 
         <div class="field">
-          <span class="field-label">Artwork</span>
-          <div class="img-grid" id="imgGrid"></div>
-          <p class="tbl__sub" style="margin-top:var(--space-2)">
-            Pick the piece this most resembles. The matching second angle is used
-            automatically for the hover image.</p>
+          <label for="pThumb">Thumbnail image URL</label>
+          <input id="pThumb" type="url" placeholder="https://… or assets/img/…">
+          <span class="field__err">Enter a valid image URL</span>
+          <p class="tbl__sub" style="margin-top:4px">Shown on the grid and in the bag.</p>
+        </div>
+
+        <div class="field">
+          <label for="pHover">Hover image URL</label>
+          <input id="pHover" type="url" placeholder="Second angle, shown on hover">
+          <p class="tbl__sub" style="margin-top:4px">Leave blank to reuse the thumbnail.</p>
+        </div>
+
+        <div class="field">
+          <label for="pGallery">Product images</label>
+          <textarea id="pGallery" style="min-height:74px"
+            placeholder="One image URL per line — these fill the product page gallery"></textarea>
+          <p class="tbl__sub" style="margin-top:4px">One URL per line. Paste links from your
+            image host or CDN.</p>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Uploaded so far</span>
+          <div class="img-grid" id="imgPreview"></div>
         </div>
 
         <div class="field">

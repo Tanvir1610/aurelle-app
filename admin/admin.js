@@ -563,17 +563,28 @@
 
   /* ------------------------------------------- editor rendering -- */
   function renderImagePicker() {
-    const host = $('#imgGrid');
-    if (!cache.images.length) {
-      host.innerHTML = '<p class="tbl__sub">Loading artwork…</p>';
-      return;
-    }
-    host.innerHTML = cache.images.map(im => `
-      <button type="button" class="img-opt ${draft.img === im.file ? 'is-active' : ''}"
-              data-img="${esc(im.file)}" data-alt="${esc(im.alt)}" title="${esc(im.label)}">
-        <img src="../${esc(im.file)}" alt="${esc(im.label)}" loading="lazy">
-      </button>`).join('');
+    const host = $('#imgPreview');
+    if (!host) return;
+    const urls = [draft.img, draft.imgAlt, ...(draft.gallery || [])]
+      .filter(Boolean)
+      .filter((u, i, arr) => arr.indexOf(u) === i);
+
+    host.innerHTML = urls.length
+      ? urls.map((u, i) => `
+          <div class="img-opt is-active" title="${esc(u)}" style="cursor:default">
+            <img src="${resolveImg(u)}" alt=""
+                 onerror="this.closest('.img-opt').classList.add('is-broken')">
+          </div>`).join('')
+      : '<p class="tbl__sub" style="padding:var(--space-3)">No images yet — paste a URL above.</p>';
   }
+
+  /** Absolute URLs load as-is; site-relative paths need ../ from /admin/. */
+  function resolveImg(u) {
+    if (!u) return '';
+    return /^https?:\/\//i.test(u) ? esc(u) : '../' + esc(u);
+  }
+
+  const isImageUrl = u => !u || /^https?:\/\//i.test(u) || /^assets\//.test(u);
 
   function renderOccasions() {
     $('#occRow').innerHTML = OCCASIONS.map(o => `
@@ -594,7 +605,7 @@
     const mrp = Number($('#pMrp').value) || 0;
     const badge = $('#pBadge').value;
 
-    $('#pvImg').src = draft.img ? '../' + draft.img : '';
+    $('#pvImg').src = draft.img ? resolveImg(draft.img) : '';
     $('#pvCat').textContent = $('#pCat').value;
     $('#pvName').textContent = $('#pName').value || 'Piece name';
     $('#pvPrice').textContent = inr(price);
@@ -623,13 +634,17 @@
       .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   });
 
-  $('#imgGrid')?.addEventListener('click', e => {
-    const b = e.target.closest('[data-img]');
-    if (!b) return;
-    draft.img = b.dataset.img;
-    draft.imgAlt = b.dataset.alt;
-    renderImagePicker();
-    renderPreview();
+  /* Typing a URL updates the preview and the storefront card live. */
+  ['#pThumb', '#pHover', '#pGallery'].forEach(sel => {
+    const el = $(sel);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      draft.img = $('#pThumb').value.trim();
+      draft.imgAlt = $('#pHover').value.trim() || draft.img;
+      draft.gallery = $('#pGallery').value.split('\n').map(x => x.trim()).filter(Boolean);
+      renderImagePicker();
+      renderPreview();
+    });
   });
 
   $('#occRow')?.addEventListener('click', e => {
@@ -669,8 +684,12 @@
     $('#pBadge').value = p && p.badge ? p.badge : '';
     $('#pBlurb').value = p ? (p.blurb || '') : '';
 
-    draft.img = p ? p.img : (cache.images[0] ? cache.images[0].file : null);
-    draft.imgAlt = p ? p.imgAlt : (cache.images[0] ? cache.images[0].alt : null);
+    draft.img = p ? p.img : '';
+    draft.imgAlt = p ? p.imgAlt : '';
+    draft.gallery = p && Array.isArray(p.gallery) ? p.gallery.slice() : [];
+    $('#pThumb').value = draft.img || '';
+    $('#pHover').value = draft.imgAlt && draft.imgAlt !== draft.img ? draft.imgAlt : '';
+    $('#pGallery').value = draft.gallery.join('\n');
     draft.occasion = p && p.occasion.length ? [...p.occasion] : ['Everyday'];
     draft.swatches = p && p.swatches.length ? [...p.swatches] : [FINISHES[0]];
 
@@ -733,8 +752,9 @@
       stock: Number($('#pStock').value),
       badge: $('#pBadge').value || null,
       blurb: $('#pBlurb').value.trim(),
-      img: draft.img,
-      imgAlt: draft.imgAlt,
+      img: draft.img || null,
+      imgAlt: draft.imgAlt || draft.img || null,
+      gallery: draft.gallery || [],
       occasion: draft.occasion,
       swatches: draft.swatches,
     };
@@ -749,6 +769,13 @@
     flag('#pName', !body.name);
     flag('#pPrice', !(body.price > 0));
     flag('#pMrp', !(body.mrp >= body.price));
+    flag('#pThumb', !!body.img && !isImageUrl(body.img));
+    const badGallery = (body.gallery || []).some(u => !isImageUrl(u));
+    if (badGallery) {
+      err.textContent = 'Product image URLs must start with http:// or https://';
+      err.style.display = 'block';
+      ok = false;
+    }
 
     // These live outside .field wrappers, so flag their containers directly.
     $('#occRow').closest('.field').classList.toggle('field--error', !body.occasion.length);

@@ -114,8 +114,10 @@ console.log('\n── the stylesheet cannot re-break the width ────');
   t('its height is clamped to something sensible',
      /height:\s*clamp\(/.test(firstRule), firstRule.replace(/\s+/g, ' ').trim());
 
-  t('the crop is biased so the logo and badges survive',
-     /object-position:\s*center\s+70%/.test(css));
+  t('the crop is anchored to the top so the model\'s face is visible',
+     /object-position:\s*center\s+top/.test(css));
+  t('a real button sits under the banner at every size',
+     /\.hero__banner-cta\s*\{[\s\S]{0,120}display:\s*inline-block/.test(css));
   t('wide screens cap the banner width instead of cropping harder',
      /@media \(min-width: 1500px\)[\s\S]{0,200}max-width:\s*1500px/.test(css));
   t('below 1024px the artwork is shown whole',

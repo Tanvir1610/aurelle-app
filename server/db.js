@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS products (
   color       TEXT,
   length      TEXT,
   features    TEXT DEFAULT '[]',
+  gallery     TEXT DEFAULT '[]',
   price       INTEGER NOT NULL,
   mrp         INTEGER NOT NULL,
   metal       TEXT NOT NULL,
@@ -148,6 +149,7 @@ const COLUMN_MIGRATIONS = [
   ['products', 'color', 'TEXT'],
   ['products', 'length', 'TEXT'],
   ['products', 'features', "TEXT DEFAULT '[]'"],
+  ['products', 'gallery', "TEXT DEFAULT '[]'"],
   ['admins', 'clerk_user_id', 'TEXT'],
   ['admins', 'role', "TEXT DEFAULT 'owner'"],
 ];
@@ -346,14 +348,15 @@ export function seedIfEmpty() {
   if (c === 0) {
     const cat = readFrontendCatalogue();
     const ins = db.prepare(`INSERT INTO products
-      (id, slug, name, cat, subcat, style, shape, color, length, features,
+      (id, slug, name, cat, subcat, style, shape, color, length, features, gallery,
        price, mrp, metal, badge, rating, reviews, stock, blurb, img, img_alt, occasion, swatches)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const p of cat.products) {
       ins.run(randomUUID(), p.slug, p.name, p.cat,
               p.subcat || null, p.style || null, p.shape || null,
               p.color || null, p.length || null,
               JSON.stringify(p.features || []),
+              JSON.stringify(p.gallery || []),
               p.price, p.mrp, p.metal,
               p.badge || null, p.rating, p.reviews, 20 + Math.floor(Math.random() * 60),
               p.blurb, p.img, p.imgAlt,
@@ -393,6 +396,7 @@ function rowToProduct(r) {
     subcat: r.subcat || null, style: r.style || null, shape: r.shape || null,
     color: r.color || null, length: r.length || null,
     features: (() => { try { return JSON.parse(r.features || '[]'); } catch (e) { return []; } })(),
+    gallery: (() => { try { return JSON.parse(r.gallery || '[]'); } catch (e) { return []; } })(),
     price: r.price, mrp: r.mrp,
     metal: r.metal, badge: r.badge, rating: r.rating, reviews: r.reviews,
     stock: r.stock, blurb: r.blurb, img: r.img, imgAlt: r.img_alt,
@@ -427,20 +431,22 @@ export function upsertProduct(p) {
         .run(p.img, p.imgAlt || p.img, p.slug);
     }
     db.prepare(`UPDATE products SET name=?, cat=?, subcat=?, style=?, shape=?, color=?,
-                length=?, features=?, price=?, mrp=?, metal=?, badge=?,
+                length=?, features=?, gallery=?, price=?, mrp=?, metal=?, badge=?,
                 stock=?, blurb=?, occasion=?, swatches=?, active=? WHERE slug=?`)
       .run(p.name, p.cat, p.subcat || null, p.style || null, p.shape || null,
            p.color || null, p.length || null, JSON.stringify(p.features || []),
+           JSON.stringify(p.gallery || []),
            p.price, p.mrp, p.metal, p.badge || null,
            p.stock ?? 25, p.blurb || '', occ, sw, p.active === false ? 0 : 1, p.slug);
   } else {
     db.prepare(`INSERT INTO products
-      (id,slug,name,cat,subcat,style,shape,color,length,features,
+      (id,slug,name,cat,subcat,style,shape,color,length,features,gallery,
        price,mrp,metal,badge,rating,reviews,stock,blurb,img,img_alt,occasion,swatches)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(randomUUID(), p.slug, p.name, p.cat,
            p.subcat || null, p.style || null, p.shape || null,
            p.color || null, p.length || null, JSON.stringify(p.features || []),
+           JSON.stringify(p.gallery || []),
            p.price, p.mrp, p.metal,
            p.badge || null, p.rating ?? 4.5, p.reviews ?? 0, p.stock ?? 25,
            p.blurb || '', p.img || 'assets/img/cat-solitaire-necklaces.jpg',
