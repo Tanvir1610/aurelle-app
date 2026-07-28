@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node --watch server/server.js",
-    "test": "node tools/smoke-test.mjs && node tools/interaction-test.mjs && node tools/api-test.mjs && node tools/auth-test.mjs && node tools/migration-test.mjs && node tools/account-test.mjs && node tools/signin-test.mjs && node tools/loop-test.mjs && node tools/dual-auth-test.mjs && node tools/pages-test.mjs && node tools/integration-test.mjs",
+    "test": "node tools/smoke-test.mjs && node tools/interaction-test.mjs && node tools/api-test.mjs && node tools/auth-test.mjs && node tools/migration-test.mjs && node tools/account-test.mjs && node tools/signin-test.mjs && node tools/loop-test.mjs && node tools/dual-auth-test.mjs && node tools/pages-test.mjs && node tools/hero-test.mjs && node tools/integration-test.mjs",
     "test:api": "node tools/api-test.mjs",
     "seed:demo": "node tools/seed-demo.mjs",
     "art": "python3 tools/generate_art.py",
@@ -21,7 +21,8 @@
     "test:signin": "node tools/signin-test.mjs",
     "test:loop": "node tools/loop-test.mjs",
     "test:dual": "node tools/dual-auth-test.mjs",
-    "test:pages": "node tools/pages-test.mjs"
+    "test:pages": "node tools/pages-test.mjs",
+    "test:hero": "node tools/hero-test.mjs"
   },
   "dependencies": {
     "jsdom": "^29.1.1"
