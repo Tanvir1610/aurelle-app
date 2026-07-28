@@ -15,26 +15,49 @@
     /* hero carousel */
     const slides = $('#heroSlides');
     if (slides) {
-      slides.innerHTML = D.hero.map((s, i) => `
-        <div class="hero__slide${i === 0 ? ' is-active' : ''}">
-          <div class="hero__media">${M.heroMedia(s)}</div>
-          <div class="hero__scrim"></div>
-          <div class="hero__body"><div class="container">
-            <div class="hero__copy">
-              <p class="eyebrow">${esc(s.eyebrow)}</p>
-              <h1>${esc(s.title)}</h1>
-              <p>${esc(s.body)}</p>
-              <div class="hero__cta">
-                <a class="btn btn--gold" href="${s.cta.href}">${esc(s.cta.label)}</a>
-                <a class="btn btn--light" href="${s.cta2.href}">${esc(s.cta2.label)}</a>
+      // Composed banners need a different frame from overlay-text heroes.
+      if (D.hero.every(h => h.composed)) $('.hero')?.classList.add('hero--composed');
+      slides.innerHTML = D.hero.map((s, i) => {
+        /* Composed banners carry their own headline and call to action, so
+           they render clean — a scrim or overlay would sit on top of the
+           artwork's own text. The whole banner becomes the link, with a real
+           button underneath on small screens where the baked-in one is tiny. */
+        if (s.composed) {
+          return `
+            <div class="hero__slide hero__slide--composed${i === 0 ? ' is-active' : ''}">
+              <a class="hero__banner" href="${s.href}" aria-label="${esc(s.label)}">
+                <picture>
+                  <source media="(max-width: 700px)" srcset="${esc(s.imgSmall || s.img)}">
+                  <img src="${esc(s.img)}" alt="${esc(s.alt)}"
+                       ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">
+                </picture>
+              </a>
+              <a class="btn btn--gold hero__banner-cta" href="${s.href}">${esc(s.label)}</a>
+            </div>`;
+        }
+
+        return `
+          <div class="hero__slide${i === 0 ? ' is-active' : ''}">
+            <div class="hero__media">${M.heroMedia(s)}</div>
+            <div class="hero__scrim"></div>
+            <div class="hero__body"><div class="container">
+              <div class="hero__copy">
+                <p class="eyebrow">${esc(s.eyebrow)}</p>
+                <h1>${esc(s.title)}</h1>
+                <p>${esc(s.body)}</p>
+                <div class="hero__cta">
+                  <a class="btn btn--gold" href="${s.cta.href}">${esc(s.cta.label)}</a>
+                  <a class="btn btn--light" href="${s.cta2.href}">${esc(s.cta2.label)}</a>
+                </div>
               </div>
-            </div>
-          </div></div>
-        </div>`).join('');
+            </div></div>
+          </div>`;
+      }).join('');
 
       const dots = $('#heroDots');
       dots.innerHTML = D.hero.map((s, i) =>
-        `<button class="hero__dot${i === 0 ? ' is-active' : ''}" type="button" data-slide="${i}" aria-label="Slide ${i + 1}: ${esc(s.eyebrow)}"></button>`).join('');
+        `<button class="hero__dot${i === 0 ? ' is-active' : ''}" type="button" data-slide="${i}"
+                 aria-label="Slide ${i + 1}: ${esc(s.label || s.eyebrow || '')}"></button>`).join('');
 
       let idx = 0, timer;
       const go = (n) => {
@@ -48,8 +71,9 @@
         const b = e.target.closest('[data-slide]');
         if (b) { stop(); go(Number(b.dataset.slide)); start(); }
       });
-      $('.hero').addEventListener('mouseenter', stop);
-      $('.hero').addEventListener('mouseleave', start);
+      const heroEl = $('.hero');
+      heroEl.addEventListener('mouseenter', stop);
+      heroEl.addEventListener('mouseleave', start);
       if (!mq('(prefers-reduced-motion: reduce)')) start();
     }
 

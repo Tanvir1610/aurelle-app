@@ -174,33 +174,33 @@ window.AU_DATA = (function () {
   ];
 
   /* --------------------------------------------------- hero ------- */
+  /* `composed: true` means the artwork already carries its own headline,
+     call to action and badges. Those slides render clean — no overlay text,
+     no scrim — because anything drawn on top would collide with the image. */
   const hero = [
     {
-      eyebrow: 'New season',
-      title: 'Adorn your every day.',
-      body: 'Anti-tarnish, skin-friendly, 24Kt gold-plated. Made for the days you are not dressing up for anyone.',
-      cta: { label: 'Shop new arrivals', href: 'collection.html?sort=new' },
-      cta2: { label: 'View lookbook', href: 'journal.html' },
-      img: 'assets/img/b-hero-01.svg',
-      video: null,
+      composed: true,
+      img: 'assets/img/hero-wedding-edit.jpg',
+      imgSmall: 'assets/img/hero-wedding-edit-sm.jpg',
+      alt: 'Aurelle Wedding Edit — bridal necklace, earrings and bangle set',
+      href: 'collection.html?occasion=Wedding',
+      label: 'Shop the Wedding Edit',
     },
     {
-      eyebrow: 'The grand Aurelle sale',
-      title: 'Flat 50% off, sitewide.',
-      body: 'Every set, every stud, every stacking ring. No code needed — the price you see is the price you pay.',
-      cta: { label: 'Shop the sale', href: 'collection.html?sale=1' },
-      cta2: { label: 'Under ₹999', href: 'collection.html?max=999' },
-      img: 'assets/img/b-hero-02.svg',
-      video: null,
+      composed: true,
+      img: 'assets/img/hero-sitaara.jpg',
+      imgSmall: 'assets/img/hero-sitaara-sm.jpg',
+      alt: 'Aurelle Sitaara Collection — crystal choker and drop earrings',
+      href: 'collection.html?sort=new',
+      label: 'Shop the Sitaara Collection',
     },
     {
-      eyebrow: 'Wedding season',
-      title: 'For the week of the wedding.',
-      body: 'Hasli collars, chandbalis and tikkas built light enough to wear from the haldi through to the vidaai.',
-      cta: { label: 'Shop bridal', href: 'collection.html?occasion=Wedding' },
-      cta2: { label: 'Find a store', href: 'stores.html' },
-      img: 'assets/img/b-hero-03.svg',
-      video: null,
+      composed: true,
+      img: 'assets/img/hero-timeless.jpg',
+      imgSmall: 'assets/img/hero-timeless-sm.jpg',
+      alt: 'Aurelle Timeless Elegance — emerald and gold necklace set',
+      href: 'collection.html?cat=Necklace+Sets',
+      label: 'Explore the collection',
     },
   ];
 
