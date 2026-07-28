@@ -143,10 +143,15 @@
   const PAGE_SIZE = 9;
 
   function collection() {
+    const F = D.facets || {};
+    const BANDS = D.priceBands || [];
+
     const state = {
-      cats: param('cat') ? [param('cat')] : [],
-      metals: param('metal') ? [param('metal')] : [],
-      occasions: param('occasion') ? [param('occasion')] : [],
+      cat: param('cat') || null,
+      style: param('style') ? [param('style')] : [],
+      shape: [], occasion: param('occasion') ? [param('occasion')] : [],
+      color: [], length: [], feature: [],
+      band: null,
       max: param('max') ? Number(param('max')) : null,
       sale: param('sale') === '1',
       q: param('q') || '',
@@ -154,88 +159,113 @@
       page: 1,
     };
 
-    const allMetals = [...new Set(D.products.map(p => p.metal))];
-    const allOcc = [...new Set(D.products.flatMap(p => p.occasion))];
-    const bands = [
-      { label: 'Under ₹999', max: 999 },
-      { label: 'Under ₹1,499', max: 1499 },
-      { label: 'Under ₹2,999', max: 2999 },
-      { label: 'Under ₹4,999', max: 4999 },
+    const GROUPS = [
+      ['style', 'Style', p => [p.style]],
+      ['shape', 'Shape', p => [p.shape]],
+      ['occasion', 'Occasion', p => p.occasion || []],
+      ['color', 'Colour', p => [p.color]],
+      ['length', 'Length', p => [p.length]],
+      ['feature', 'Features', p => p.features || []],
     ];
 
+    const valuesOf = (p, key) => (GROUPS.find(g => g[0] === key)[2](p) || []).filter(Boolean);
+
     function match(p) {
-      if (state.cats.length && !state.cats.includes(p.cat)) return false;
-      if (state.metals.length && !state.metals.includes(p.metal)) return false;
-      if (state.occasions.length && !p.occasion.some(o => state.occasions.includes(o))) return false;
+      if (state.cat && p.subcat !== state.cat && p.cat !== state.cat) return false;
+      for (const [key] of GROUPS) {
+        if (state[key].length && !valuesOf(p, key).some(v => state[key].includes(v))) return false;
+      }
+      if (state.band && !(p.price >= state.band.min && p.price < state.band.max)) return false;
       if (state.max && p.price > state.max) return false;
       if (state.sale && !(p.mrp > p.price)) return false;
       if (state.q) {
-        const hay = (p.name + ' ' + p.cat + ' ' + p.metal + ' ' + p.blurb).toLowerCase();
-        if (!hay.includes(state.q.toLowerCase())) return false;
+        const hay = [p.name, p.cat, p.subcat, p.style, p.shape, p.color,
+                     p.blurb, ...(p.features || []), ...(p.occasion || [])]
+                     .filter(Boolean).join(' ').toLowerCase();
+        if (!state.q.toLowerCase().split(/\s+/).every(w => hay.includes(w))) return false;
       }
       return true;
     }
 
     function sorted(list) {
       const l = list.slice();
-      if (state.sort === 'low')     l.sort((a, b) => a.price - b.price);
+      if (state.sort === 'low') l.sort((a, b) => a.price - b.price);
       else if (state.sort === 'high') l.sort((a, b) => b.price - a.price);
-      else if (state.sort === 'new')  l.sort((a, b) => (b.badge === 'New') - (a.badge === 'New'));
+      else if (state.sort === 'new') l.sort((a, b) => (b.badge === 'New') - (a.badge === 'New'));
       else if (state.sort === 'popular') l.sort((a, b) => b.reviews - a.reviews);
-      else if (state.sort === 'rating')  l.sort((a, b) => b.rating - a.rating);
+      else if (state.sort === 'rating') l.sort((a, b) => b.rating - a.rating);
       return l;
     }
 
-    function facetCount(fn) { return D.products.filter(fn).length; }
+    /* Counts reflect the other active filters, so a facet never leads to
+       an empty result. */
+    function countFor(key, value) {
+      const saved = state[key];
+      state[key] = [value];
+      const n = D.products.filter(match).length;
+      state[key] = saved;
+      return n;
+    }
 
     function renderFilters() {
-      const box = $('#filters');
-      const cb = (group, value, checked, count) => `
-        <label class="filter-opt">
-          <input type="checkbox" data-group="${group}" value="${esc(value)}"${checked ? ' checked' : ''}>
-          <span>${esc(value)}</span><em>${count}</em>
-        </label>`;
-
-      box.innerHTML = `
+      const cats = (D.categories || []).filter(c => c.active !== false);
+      let html = `
         <div class="filter-group">
           <h4>Category</h4>
-          ${D.categories.map(c => cb('cats', c.label, state.cats.includes(c.label), facetCount(p => p.cat === c.label))).join('')}
+          <label class="filter-opt">
+            <input type="radio" name="cat" data-cat="" ${!state.cat ? 'checked' : ''}>
+            <span>All necklaces</span><em>${D.products.length}</em></label>
+          ${cats.map(c => {
+            const n = D.products.filter(p => p.subcat === c.label || p.cat === c.label).length;
+            return `<label class="filter-opt">
+              <input type="radio" name="cat" data-cat="${esc(c.label)}"
+                     ${state.cat === c.label ? 'checked' : ''}>
+              <span>${esc(c.label)}</span><em>${n}</em></label>`;
+          }).join('')}
         </div>
+
         <div class="filter-group">
           <h4>Price</h4>
-          ${bands.map(b => `
-            <label class="filter-opt">
-              <input type="radio" name="price" data-group="max" value="${b.max}"${state.max === b.max ? ' checked' : ''}>
-              <span>${b.label}</span><em>${facetCount(p => p.price <= b.max)}</em>
-            </label>`).join('')}
           <label class="filter-opt">
-            <input type="radio" name="price" data-group="max" value=""${!state.max ? ' checked' : ''}>
-            <span>Any price</span><em>${D.products.length}</em>
-          </label>
-        </div>
-        <div class="filter-group">
-          <h4>Metal</h4>
-          ${allMetals.map(m => cb('metals', m, state.metals.includes(m), facetCount(p => p.metal === m))).join('')}
-        </div>
-        <div class="filter-group">
-          <h4>Occasion</h4>
-          ${allOcc.map(o => cb('occasions', o, state.occasions.includes(o), facetCount(p => p.occasion.includes(o)))).join('')}
+            <input type="radio" name="band" data-band="" ${!state.band ? 'checked' : ''}>
+            <span>Any price</span><em>${D.products.length}</em></label>
+          ${BANDS.map((b, i) => `<label class="filter-opt">
+            <input type="radio" name="band" data-band="${i}"
+                   ${state.band === b ? 'checked' : ''}>
+            <span>${esc(b.label)}</span>
+            <em>${D.products.filter(p => p.price >= b.min && p.price < b.max).length}</em>
+          </label>`).join('')}
         </div>`;
+
+      for (const [key, title] of GROUPS) {
+        const opts = F[key] || [];
+        if (!opts.length) continue;
+        html += `<div class="filter-group"><h4>${esc(title)}</h4>
+          ${opts.map(v => {
+            const n = countFor(key, v);
+            return `<label class="filter-opt${n ? '' : ' is-empty'}">
+              <input type="checkbox" data-group="${key}" value="${esc(v)}"
+                     ${state[key].includes(v) ? 'checked' : ''} ${n ? '' : 'disabled'}>
+              <span>${esc(v)}</span><em>${n}</em></label>`;
+          }).join('')}
+        </div>`;
+      }
+      $('#filters').innerHTML = html;
     }
 
     function renderChips() {
       const chips = [];
-      state.cats.forEach(v => chips.push(['cats', v]));
-      state.metals.forEach(v => chips.push(['metals', v]));
-      state.occasions.forEach(v => chips.push(['occasions', v]));
-      if (state.max) chips.push(['max', `Under ${inr(state.max)}`]);
+      if (state.cat) chips.push(['cat', state.cat]);
+      for (const [key] of GROUPS) state[key].forEach(v => chips.push([key, v]));
+      if (state.band) chips.push(['band', state.band.label]);
       if (state.sale) chips.push(['sale', 'On sale']);
       if (state.q) chips.push(['q', `“${state.q}”`]);
 
-      const host = $('#activeChips');
-      host.innerHTML = chips.length
-        ? chips.map(([g, v]) => `<button class="chip" type="button" data-clear="${g}" data-val="${esc(v)}">${esc(v)} ${icon('x', 12)}</button>`).join('')
-          + `<button class="chip" type="button" data-clear="all">Clear all</button>`
+      $('#activeChips').innerHTML = chips.length
+        ? chips.map(([g, v]) =>
+            `<button class="chip" type="button" data-clear="${g}" data-val="${esc(v)}">
+               ${esc(v)} ${icon('x', 12)}</button>`).join('') +
+          `<button class="chip" type="button" data-clear="all">Clear all</button>`
         : '';
     }
 
@@ -250,9 +280,8 @@
 
       $('#plpGrid').innerHTML = slice.length
         ? `<div class="product-grid product-grid--3">${slice.map(productCard).join('')}</div>`
-        : `<div class="empty">
-             <h3>Nothing matches those filters</h3>
-             <p>Try widening the price band, or clear the filters and start again.</p>
+        : `<div class="empty"><h3>Nothing matches those filters</h3>
+             <p>Try removing one, or clear them and start again.</p>
              <button class="btn btn--ghost" type="button" data-clear="all">Clear all filters</button>
            </div>`;
 
@@ -263,11 +292,10 @@
         <button type="button" data-page="${state.page + 1}"${state.page === pages ? ' disabled' : ''}>Next</button>` : '';
     }
 
-    /* title reflects the entry point */
-    const title = state.cats[0] || (state.sale ? 'The Aurelle sale'
-                  : state.occasions[0] ? `${state.occasions[0]} edit`
-                  : state.metals[0] ? `${state.metals[0]} pieces`
-                  : state.max ? `Under ${inr(state.max)}` : 'All jewellery');
+    const title = state.cat || (state.sale ? 'The Aurelle sale'
+      : state.style[0] ? `${state.style[0]} necklaces`
+      : state.occasion[0] ? `${state.occasion[0]} edit`
+      : 'American diamond necklaces');
     $('#plpTitle').textContent = title;
     $('#plpCrumb').textContent = title;
 
@@ -275,32 +303,102 @@
     render();
 
     $('#plpSort').value = state.sort;
-    $('#plpSort').addEventListener('change', e => { state.sort = e.target.value; state.page = 1; render(); });
+    $('#plpSort').addEventListener('change', e => {
+      state.sort = e.target.value; state.page = 1; render();
+    });
 
-    $('#plpSearch')?.addEventListener('input', e => { state.q = e.target.value; state.page = 1; render(); });
+    /* ---------------------------------------- search with suggestions -- */
+    const search = $('#plpSearch');
+    const sugg = $('#searchSuggest');
 
+    function suggestionsFor(q) {
+      const term = q.toLowerCase().trim();
+      if (!term) return [];
+      const out = [];
+      (D.searchTerms || []).forEach(t => {
+        if (t.toLowerCase().includes(term)) out.push({ kind: 'Search', label: t, apply: () => { state.q = t; } });
+      });
+      (D.categories || []).forEach(c => {
+        if (c.label.toLowerCase().includes(term))
+          out.push({ kind: 'Category', label: c.label, apply: () => { state.cat = c.label; state.q = ''; } });
+      });
+      for (const [key, title] of GROUPS) {
+        (F[key] || []).forEach(v => {
+          if (v.toLowerCase().includes(term))
+            out.push({ kind: title, label: v, apply: () => { state[key] = [v]; state.q = ''; } });
+        });
+      }
+      D.products.forEach(p => {
+        if (p.name.toLowerCase().includes(term))
+          out.push({ kind: 'Product', label: p.name, href: `product.html?p=${p.slug}` });
+      });
+      return out.slice(0, 8);
+    }
+
+    let current = [];
+    function paintSuggestions(q) {
+      current = suggestionsFor(q);
+      if (!current.length) { sugg.hidden = true; sugg.innerHTML = ''; return; }
+      sugg.hidden = false;
+      sugg.innerHTML = current.map((s, i) => `
+        <button type="button" class="suggest__row" data-sugg="${i}">
+          <span class="suggest__kind">${esc(s.kind)}</span>
+          <span>${esc(s.label)}</span>
+        </button>`).join('');
+    }
+
+    search.addEventListener('input', e => {
+      state.q = e.target.value;
+      state.page = 1;
+      paintSuggestions(e.target.value);
+      render();
+    });
+    search.addEventListener('focus', e => paintSuggestions(e.target.value));
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.search-wrap')) sugg.hidden = true;
+    });
+    sugg.addEventListener('click', e => {
+      const b = e.target.closest('[data-sugg]');
+      if (!b) return;
+      const pick = current[Number(b.dataset.sugg)];
+      if (pick.href) { location.href = pick.href; return; }
+      pick.apply();
+      search.value = state.q;
+      sugg.hidden = true;
+      state.page = 1;
+      renderFilters(); render();
+    });
+
+    /* ------------------------------------------------------ facets -- */
     $('#filters').addEventListener('change', e => {
       const el = e.target;
-      const g = el.dataset.group;
-      if (!g) return;
-      if (g === 'max') state.max = el.value ? Number(el.value) : null;
-      else {
+      if (el.dataset.cat !== undefined) {
+        state.cat = el.dataset.cat || null;
+      } else if (el.dataset.band !== undefined) {
+        state.band = el.dataset.band === '' ? null : BANDS[Number(el.dataset.band)];
+      } else if (el.dataset.group) {
+        const g = el.dataset.group;
         const set = new Set(state[g]);
         el.checked ? set.add(el.value) : set.delete(el.value);
         state[g] = [...set];
-      }
+      } else return;
       state.page = 1;
-      render();
+      renderFilters(); render();
     });
 
     document.addEventListener('click', e => {
       const clear = e.target.closest('[data-clear]');
       if (clear) {
         const g = clear.dataset.clear;
-        if (g === 'all') { state.cats = []; state.metals = []; state.occasions = []; state.max = null; state.sale = false; state.q = ''; if ($('#plpSearch')) $('#plpSearch').value = ''; }
-        else if (g === 'max') state.max = null;
+        if (g === 'all') {
+          state.cat = null; state.band = null; state.max = null;
+          state.sale = false; state.q = '';
+          GROUPS.forEach(([k]) => { state[k] = []; });
+          if (search) search.value = '';
+        } else if (g === 'cat') state.cat = null;
+        else if (g === 'band') state.band = null;
         else if (g === 'sale') state.sale = false;
-        else if (g === 'q') { state.q = ''; if ($('#plpSearch')) $('#plpSearch').value = ''; }
+        else if (g === 'q') { state.q = ''; if (search) search.value = ''; }
         else state[g] = state[g].filter(v => v !== clear.dataset.val);
         state.page = 1;
         renderFilters(); render();

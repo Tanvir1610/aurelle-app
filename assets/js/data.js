@@ -14,6 +14,33 @@ window.AU_DATA = (function () {
     pearl:  { key: 'pearl',  color: '#f0e9dd', label: 'Pearl' },
   };
 
+  /* -------------------------------------------- filter taxonomy --- */
+  /* Short, searchable values. These drive the sidebar facets, the search
+     suggestions and the chips on the collection page. */
+  const facets = {
+    style:    ['Solitaire','Tennis','Pendant','Choker','Layered','Statement','Minimal','Bridal','Floral','Heart'],
+    shape:    ['Round','Oval','Pear','Emerald','Princess','Marquise','Cushion'],
+    occasion: ['Daily Wear','Office Wear','Party Wear','Wedding','Festive'],
+    color:    ['Silver','Gold','Rose Gold'],
+    length:   ['Short','Medium','Long'],
+    feature:  ['New Arrival','Best Seller','Trending','Lightweight','Adjustable Chain','Gift for Her'],
+  };
+
+  const priceBands = [
+    { label: 'Under ₹999',      min: 0,    max: 999 },
+    { label: '₹999 – ₹1,499',   min: 999,  max: 1499 },
+    { label: '₹1,499 – ₹1,999', min: 1499, max: 1999 },
+    { label: '₹2,000+',         min: 2000, max: Infinity },
+  ];
+
+  /* Typed into the search box, these surface the right products fast. */
+  const searchTerms = [
+    'American Diamond Necklace','AD Necklace','CZ Necklace','Diamond Pendant',
+    'Tennis Necklace','Bridal Necklace','Party Necklace','Daily Wear Necklace',
+    'Silver AD Necklace','Gold AD Necklace','Layered Necklace','Choker Necklace',
+    'Heart Necklace','Solitaire Necklace','Floral Necklace',
+  ];
+
   /* -------------------------------------------------- products ---- */
   const P = (slug, name, cat, price, mrp, opts) => Object.assign({
     slug, name, cat, price, mrp,
@@ -24,153 +51,124 @@ window.AU_DATA = (function () {
     blurb: 'Made to be worn often and loved longer.',
   }, opts || {});
 
+  const AD = (slug, name, style, price, mrp, opts) => Object.assign({
+    slug, name, cat: 'Necklaces', subcat: style + ' Necklaces', style,
+    price, mrp,
+    img: `assets/img/p-${slug}.jpg`,
+    imgAlt: `assets/img/p-${slug}-alt.jpg`,
+    rating: 4.5, reviews: 40, badge: null,
+    metal: 'Silver', color: 'Silver', shape: 'Round', length: 'Medium',
+    occasion: ['Daily Wear'], features: [],
+    swatches: [SW.silver],
+    blurb: 'American diamond stones in a rhodium-finished setting.',
+  }, opts || {});
+
   const products = [
-    P('rosevine-necklace-set', 'Rosevine Necklace Set', 'Necklace Sets', 2400, 4799, {
-      rating: 4.6, reviews: 212, badge: 'Bestseller', metal: 'Rose Gold',
-      occasion: ['Wedding', 'Festive'], swatches: [SW.gold, SW.rose],
-      blurb: 'A climbing-vine collar with a hand-set centre stone — the piece people ask about before they ask your name.',
-    }),
-    P('amara-emerald-studs', 'Amara Emerald Studs', 'Earrings', 1250, 2499, {
-      rating: 4.8, reviews: 64, badge: 'New', metal: 'Gold',
-      occasion: ['Office', 'Everyday'], swatches: [SW.emerald, SW.ruby],
-      blurb: 'Six petals around a deep green centre. Light enough for a twelve-hour day.',
-    }),
-    P('solene-pearl-drops', 'Solene Pearl Drops', 'Earrings', 900, 1799, {
-      rating: 4.4, reviews: 38, metal: 'Silver', occasion: ['Office', 'Everyday'],
+    AD('ad-solitaire-radiance', 'Radiance Solitaire Necklace', 'Solitaire', 1299, 2599, {
+      rating: 4.7, reviews: 168, badge: 'Bestseller', shape: 'Round', length: 'Short',
+      color: 'Silver', occasion: ['Daily Wear', 'Office Wear'],
+      features: ['Best Seller', 'Lightweight', 'Adjustable Chain'],
       swatches: [SW.silver, SW.gold],
-      blurb: 'A single freshwater-look pearl on a fine hook. Quiet, and quietly expensive-looking.',
+      blurb: 'A single round-cut stone on a fine chain. The one you forget you are wearing.',
     }),
-    P('mahira-ruby-hasli', 'Mahira Ruby Hasli Set', 'Necklace Sets', 3500, 6999, {
-      rating: 4.7, reviews: 156, badge: 'Bestseller', metal: 'Gold',
-      occasion: ['Wedding', 'Festive'], swatches: [SW.ruby, SW.gold],
-      blurb: 'A rigid hasli collar with ruby-red stones — built for the sangeet, kept for the anniversary.',
+    AD('ad-tennis-riviera', 'Riviera Tennis Necklace', 'Tennis', 2499, 4999, {
+      rating: 4.8, reviews: 94, badge: 'Bestseller', shape: 'Round', length: 'Short',
+      occasion: ['Party Wear', 'Wedding'],
+      features: ['Best Seller', 'Trending'],
+      swatches: [SW.silver],
+      blurb: 'An unbroken line of matched stones, each one set by hand.',
     }),
-    P('noor-solitaire-pendant', 'Noor Solitaire Pendant', 'Pendants', 1500, 2999, {
-      rating: 4.5, reviews: 98, occasion: ['Everyday', 'Gifting'], swatches: [SW.gold, SW.silver],
-      blurb: 'One stone, one chain, nothing else. The pendant you stop taking off.',
+    AD('ad-pendant-lumina', 'Lumina Diamond Pendant', 'Pendant', 899, 1799, {
+      rating: 4.6, reviews: 212, shape: 'Pear', length: 'Medium',
+      occasion: ['Daily Wear', 'Office Wear'],
+      features: ['Lightweight', 'Gift for Her', 'Adjustable Chain'],
+      swatches: [SW.silver, SW.rose],
+      blurb: 'A pear-drop stone that catches light with every turn of the head.',
     }),
-    P('sitara-choker-set', 'Sitara Choker Set', 'Chokers', 2750, 5499, {
-      rating: 4.9, reviews: 41, badge: 'New', metal: 'Gold',
-      occasion: ['Festive', 'Wedding'], swatches: [SW.gold, SW.rose],
-      blurb: 'Nineteen graduated stones that sit high on the collarbone. Made for a high neckline.',
-    }),
-    P('ila-floral-studs', 'Ila Floral Studs', 'Earrings', 499, 899, {
-      rating: 4.3, reviews: 210, metal: 'Rose Gold', occasion: ['Everyday'],
-      swatches: [SW.rose, SW.emerald],
-      blurb: 'The first pair most people buy from us, and the pair they re-buy in a second finish.',
-    }),
-    P('veda-kundan-tikka', 'Veda Kundan Maang Tikka', 'Maang Tikka', 1350, 2699, {
-      rating: 4.6, reviews: 52, occasion: ['Wedding'], swatches: [SW.gold],
-      blurb: 'A kundan-style centrepiece on a beaded chain, weighted so it sits flat and stays put.',
-    }),
-    P('anaya-rose-bracelet', 'Anaya Rose Bracelet', 'Bracelets', 1250, 2499, {
-      rating: 4.4, reviews: 73, metal: 'Rose Gold', occasion: ['Everyday', 'Gifting'],
-      swatches: [SW.rose, SW.gold],
-      blurb: 'Twelve stones on an adjustable link. Sized to fit almost every wrist we have measured.',
-    }),
-    P('kiara-crystal-bloom-set', 'Kiara Crystal Bloom Set', 'Necklace Sets', 2150, 4299, {
-      rating: 4.8, reviews: 187, badge: 'Bestseller', metal: 'Gold',
-      occasion: ['Festive', 'Office'], swatches: [SW.emerald, SW.rose],
-      blurb: 'Necklace and matching studs. Bought as a set far more often than separately.',
-    }),
-    P('zara-sapphire-ring', 'Zara Sapphire Ring', 'Rings', 800, 1599, {
-      rating: 4.2, reviews: 44, metal: 'Silver', occasion: ['Everyday', 'Office'],
-      swatches: [SW.silver, SW.ruby],
-      blurb: 'A raised blue stone on a slim band. Stacks well with the Riya.',
-    }),
-    P('meera-pearl-necklace-set', 'Meera Pearl Necklace Set', 'Necklace Sets', 1350, 2699, {
-      rating: 4.5, reviews: 129, metal: 'Pearl', occasion: ['Office', 'Everyday'],
-      swatches: [SW.pearl, SW.gold],
-      blurb: 'Graduated pearls with a gold clasp. Reads formal without reading costume.',
-    }),
-    P('tara-halo-hoops', 'Tara Halo Hoops', 'Earrings', 1100, 2199, {
-      rating: 4.7, reviews: 88, badge: 'New', occasion: ['Everyday', 'Office'],
+    AD('ad-choker-regal', 'Regal Choker Necklace', 'Choker', 1899, 3799, {
+      rating: 4.7, reviews: 76, badge: 'New', shape: 'Marquise', length: 'Short',
+      color: 'Gold', metal: 'Gold', occasion: ['Party Wear', 'Festive'],
+      features: ['New Arrival', 'Trending'],
       swatches: [SW.gold, SW.silver],
-      blurb: 'Hoops with a ring of small stones on the front face only — the back stays smooth against the neck.',
+      blurb: 'Sits high on the collarbone. Made for a high neckline and a bare neck.',
     }),
-    P('nisha-stackable-bangles', 'Nisha Stackable Bangles', 'Bangles', 1950, 3899, {
-      rating: 4.6, reviews: 102, occasion: ['Festive', 'Wedding'], swatches: [SW.gold, SW.rose],
-      blurb: 'A set of three in graduating widths. Wear all three, or just the thin one.',
-    }),
-    P('aleena-teardrop-danglers', 'Aleena Teardrop Danglers', 'Earrings', 1450, 2899, {
-      rating: 4.5, reviews: 57, metal: 'Ruby', occasion: ['Wedding', 'Festive'],
-      swatches: [SW.ruby, SW.gold],
-      blurb: 'Long enough to catch light when you turn your head, light enough to forget.',
-    }),
-    P('riya-minimal-band', 'Riya Minimal Band', 'Rings', 599, 1199, {
-      rating: 4.4, reviews: 165, metal: 'Silver', occasion: ['Everyday', 'Office'],
+    AD('ad-layered-cascade', 'Cascade Layered Necklace', 'Layered', 1599, 3199, {
+      rating: 4.5, reviews: 58, shape: 'Round', length: 'Long',
+      occasion: ['Party Wear', 'Daily Wear'],
+      features: ['Trending', 'Adjustable Chain'],
       swatches: [SW.silver, SW.gold],
-      blurb: 'Two millimetres wide. The one you wear to the gym and forget to take off.',
+      blurb: 'Three tiers on one clasp — the layered look without the morning tangle.',
     }),
-    P('saira-layered-chain', 'Saira Layered Chain', 'Pendants', 1650, 3299, {
-      rating: 4.6, reviews: 71, badge: 'Bestseller', occasion: ['Everyday'],
+    AD('ad-statement-grandeur', 'Grandeur Statement Necklace', 'Statement', 3499, 6999, {
+      rating: 4.9, reviews: 47, shape: 'Emerald', length: 'Short',
+      occasion: ['Wedding', 'Festive'],
+      features: ['Trending'],
+      swatches: [SW.silver, SW.gold],
+      blurb: 'Wide, bold and unapologetic. Wear it with nothing else.',
+    }),
+    AD('ad-floral-blossom', 'Blossom Floral Necklace', 'Floral', 1199, 2399, {
+      rating: 4.6, reviews: 131, shape: 'Round', length: 'Medium',
+      color: 'Rose Gold', metal: 'Rose Gold', occasion: ['Festive', 'Party Wear'],
+      features: ['Gift for Her', 'Lightweight'],
+      swatches: [SW.rose, SW.silver],
+      blurb: 'Petals of pavé stones around an open centre.',
+    }),
+    AD('ad-heart-amara', 'Amara Heart Necklace', 'Heart', 799, 1599, {
+      rating: 4.4, reviews: 264, shape: 'Round', length: 'Medium',
+      color: 'Rose Gold', metal: 'Rose Gold', occasion: ['Daily Wear'],
+      features: ['Gift for Her', 'Lightweight', 'Adjustable Chain'],
+      swatches: [SW.rose, SW.silver],
+      blurb: 'Our most-gifted piece, three years running.',
+    }),
+    AD('ad-bridal-maharani', 'Maharani Bridal Necklace', 'Bridal', 4999, 9999, {
+      rating: 4.9, reviews: 63, badge: 'Bestseller', shape: 'Cushion', length: 'Long',
+      color: 'Gold', metal: 'Gold', occasion: ['Wedding'],
+      features: ['Best Seller'],
+      swatches: [SW.gold],
+      blurb: 'Full bridal weight in the look, half of it on the neck.',
+    }),
+    AD('ad-everyday-sheen', 'Sheen Everyday Necklace', 'Minimal', 649, 1299, {
+      rating: 4.3, reviews: 301, shape: 'Round', length: 'Short',
+      occasion: ['Daily Wear', 'Office Wear'],
+      features: ['Lightweight', 'Adjustable Chain'],
+      swatches: [SW.silver, SW.gold],
+      blurb: 'Thin, flat and snag-free. Goes under a collar without a bump.',
+    }),
+    AD('ad-solitaire-halo', 'Halo Solitaire Necklace', 'Solitaire', 1499, 2999, {
+      rating: 4.7, reviews: 88, badge: 'New', shape: 'Oval', length: 'Short',
+      occasion: ['Office Wear', 'Party Wear'],
+      features: ['New Arrival', 'Gift for Her'],
+      swatches: [SW.silver, SW.rose],
+      blurb: 'An oval centre stone ringed with pavé, so it reads larger than it is.',
+    }),
+    AD('ad-tennis-classic', 'Classic Tennis Necklace', 'Tennis', 1999, 3999, {
+      rating: 4.6, reviews: 72, shape: 'Princess', length: 'Medium',
+      occasion: ['Party Wear', 'Office Wear'],
+      features: ['Trending', 'Adjustable Chain'],
+      swatches: [SW.silver],
+      blurb: 'Princess-cut stones in a slimmer line — the everyday tennis.',
+    }),
+    AD('ad-pendant-drop', 'Aria Drop Pendant', 'Pendant', 1099, 2199, {
+      rating: 4.5, reviews: 145, shape: 'Marquise', length: 'Medium',
+      color: 'Gold', metal: 'Gold', occasion: ['Festive', 'Daily Wear'],
+      features: ['Gift for Her', 'Lightweight'],
       swatches: [SW.gold, SW.silver],
-      blurb: 'Two chains, one clasp — the layered look without the tangle.',
-    }),
-    P('devi-temple-choker', 'Devi Temple Choker', 'Chokers', 3200, 6399, {
-      rating: 4.8, reviews: 63, occasion: ['Wedding', 'Festive'], swatches: [SW.gold],
-      blurb: 'Temple-motif panels on a fitted band. Our most requested bridal piece.',
-    }),
-    P('mira-pearl-bangle', 'Mira Pearl Bangle', 'Bangles', 1050, 2099, {
-      rating: 4.3, reviews: 49, metal: 'Pearl', occasion: ['Office', 'Everyday'],
-      swatches: [SW.pearl, SW.silver],
-      blurb: 'Pearls set flush into the band so nothing catches on a sleeve.',
-    }),
-    P('elara-emerald-ring', 'Elara Emerald Ring', 'Rings', 1350, 2699, {
-      rating: 4.7, reviews: 61, metal: 'Emerald', occasion: ['Festive', 'Gifting'],
-      swatches: [SW.emerald, SW.gold],
-      blurb: 'A cushion-cut green stone with a fine gold halo. Sits low, snags nothing.',
-    }),
-    P('aisha-jhumka-drops', 'Aisha Jhumka Drops', 'Earrings', 1750, 3499, {
-      rating: 4.9, reviews: 143, badge: 'Bestseller', occasion: ['Wedding', 'Festive'],
-      swatches: [SW.ruby, SW.gold],
-      blurb: 'A classic jhumka silhouette at half the usual weight. Your ears will notice the difference by hour four.',
-    }),
-    P('naina-charm-bracelet', 'Naina Charm Bracelet', 'Bracelets', 1500, 2999, {
-      rating: 4.5, reviews: 84, occasion: ['Gifting', 'Everyday'], swatches: [SW.gold, SW.rose],
-      blurb: 'Five charms on an adjustable chain. Add to it over the years.',
-    }),
-    P('ruhi-heart-pendant', 'Ruhi Heart Pendant', 'Pendants', 750, 1499, {
-      rating: 4.4, reviews: 198, metal: 'Rose Gold', occasion: ['Gifting', 'Everyday'],
-      swatches: [SW.rose, SW.silver],
-      blurb: 'Small, rose-gold, and our most-gifted piece three years running.',
-    }),
-    P('ishani-bridal-set', 'Ishani Bridal Necklace Set', 'Necklace Sets', 4800, 9599, {
-      rating: 4.9, reviews: 76, badge: 'Bestseller', metal: 'Ruby',
-      occasion: ['Wedding'], swatches: [SW.ruby, SW.gold],
-      blurb: 'Necklace, earrings and tikka. Everything the look needs, in one box.',
-    }),
-    P('lira-pearl-studs', 'Lira Pearl Studs', 'Earrings', 450, 899, {
-      rating: 4.2, reviews: 231, metal: 'Pearl', occasion: ['Office', 'Everyday'],
-      swatches: [SW.pearl, SW.gold],
-      blurb: 'The stud you keep a spare pair of.',
-    }),
-    P('avni-chandbali', 'Avni Chandbali Earrings', 'Earrings', 2100, 4199, {
-      rating: 4.8, reviews: 92, occasion: ['Wedding', 'Festive'], swatches: [SW.gold, SW.ruby],
-      blurb: 'A crescent frame with a beaded fringe. Full drama, half the weight.',
-    }),
-    P('kaya-twist-ring', 'Kaya Twist Ring', 'Rings', 899, 1799, {
-      rating: 4.3, reviews: 55, metal: 'Rose Gold', occasion: ['Everyday'],
-      swatches: [SW.rose, SW.silver],
-      blurb: 'Two strands twisted into one band. Looks like a stack, wears like a single ring.',
-    }),
-    P('tanvi-polki-tikka', 'Tanvi Polki Maang Tikka', 'Maang Tikka', 1899, 3799, {
-      rating: 4.7, reviews: 38, badge: 'New', metal: 'Ruby',
-      occasion: ['Wedding'], swatches: [SW.ruby, SW.gold],
-      blurb: 'Polki-style uncut stones with a hook that grips without pulling.',
+      blurb: 'A marquise stone hung so it always falls straight.',
     }),
   ];
 
   /* ------------------------------------------------ categories ---- */
   const categories = [
-    { label: 'Necklace Sets', slug: 'necklace-sets', img: 'assets/img/cat-necklace-sets.svg', count: 128 },
-    { label: 'Earrings',      slug: 'earrings',      img: 'assets/img/cat-earrings.svg',      count: 342 },
-    { label: 'Rings',         slug: 'rings',         img: 'assets/img/cat-rings.svg',         count: 96 },
-    { label: 'Bracelets',     slug: 'bracelets',     img: 'assets/img/cat-bracelets.svg',     count: 74 },
-    { label: 'Chokers',       slug: 'chokers',       img: 'assets/img/cat-chokers.svg',       count: 38 },
-    { label: 'Pendants',      slug: 'pendants',      img: 'assets/img/cat-pendants.svg',      count: 61 },
-    { label: 'Maang Tikka',   slug: 'maang-tikka',   img: 'assets/img/cat-maang-tikka.svg',   count: 27 },
-    { label: 'Bangles',       slug: 'bangles',       img: 'assets/img/cat-bangles.svg',       count: 52 },
+    { label: 'Solitaire Necklaces', slug: 'solitaire-necklaces', style: 'Solitaire', img: 'assets/img/cat-solitaire-necklaces.jpg', count: 24, active: true },
+    { label: 'Tennis Necklaces',    slug: 'tennis-necklaces',    style: 'Tennis',    img: 'assets/img/cat-tennis-necklaces.jpg',    count: 18, active: true },
+    { label: 'Pendant Necklaces',   slug: 'pendant-necklaces',   style: 'Pendant',   img: 'assets/img/cat-pendant-necklaces.jpg',   count: 42, active: true },
+    { label: 'Choker Necklaces',    slug: 'choker-necklaces',    style: 'Choker',    img: 'assets/img/cat-choker-necklaces.jpg',    count: 21, active: true },
+    { label: 'Layered Necklaces',   slug: 'layered-necklaces',   style: 'Layered',   img: 'assets/img/cat-layered-necklaces.jpg',   count: 16, active: true },
+    { label: 'Statement Necklaces', slug: 'statement-necklaces', style: 'Statement', img: 'assets/img/cat-statement-necklaces.jpg', count: 12, active: true },
+    { label: 'Floral Necklaces',    slug: 'floral-necklaces',    style: 'Floral',    img: 'assets/img/cat-floral-necklaces.jpg',    count: 19, active: true },
+    { label: 'Heart Necklaces',     slug: 'heart-necklaces',     style: 'Heart',     img: 'assets/img/cat-heart-necklaces.jpg',     count: 23, active: true },
+    { label: 'Bridal Necklaces',    slug: 'bridal-necklaces',    style: 'Bridal',    img: 'assets/img/cat-bridal-necklaces.jpg',    count: 15, active: true },
+    { label: 'Everyday Necklaces',  slug: 'everyday-necklaces',  style: 'Minimal',   img: 'assets/img/cat-everyday-necklaces.jpg',  count: 31, active: true },
   ];
 
   /* --------------------------------------------------- hero ------- */
@@ -291,5 +289,6 @@ window.AU_DATA = (function () {
   ];
 
   return { products, categories, hero, announcements, collections, budget,
-           reviews, stores, faqs, journal, megamenu, usps, SW };
+           reviews, stores, faqs, journal, megamenu, usps, SW,
+           facets, priceBands, searchTerms };
 })();

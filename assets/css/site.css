@@ -169,7 +169,7 @@
    the headline and button sit mid-frame and always survive. */
 .hero--composed .hero__slides {
   width: 100%;
-  height: clamp(320px, 46vw, 760px);
+  height: clamp(260px, 38vw, 580px);
 }
 .hero--composed .hero__slide { position: absolute; inset: 0; }
 /* The artwork's logo sits near the top and its badges near the bottom, so
@@ -183,8 +183,11 @@
 /* On very wide monitors the banner would need an enormous natural height to
    stay uncropped, so cap its width instead and let the page colour show at
    the edges. */
-@media (min-width: 2000px) {
-  .hero--composed .hero__slides { max-width: 2000px; margin-inline: auto; }
+/* Cap the banner width so a shorter hero can still show the whole artwork.
+   Above this the page colour shows at the edges, which reads as intentional
+   letterboxing rather than a layout fault. */
+@media (min-width: 1500px) {
+  .hero--composed .hero__slides { max-width: 1500px; margin-inline: auto; }
 }
 .hero__slide {
   position: absolute; inset: 0; opacity: 0; transition: opacity var(--dur-slower) var(--ease-out);
@@ -788,3 +791,29 @@
   .dash-hero { padding: var(--space-5); }
   .track-node span { font-size: 8px; }
 }
+
+/* ============================================================
+   SEARCH SUGGESTIONS
+   ============================================================ */
+.search-wrap { position: relative; }
+.suggest {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+  background: var(--color-surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs); box-shadow: var(--shadow-md);
+  max-height: 320px; overflow-y: auto; margin-top: 4px;
+}
+.suggest__row {
+  display: flex; align-items: center; gap: var(--space-3); width: 100%;
+  padding: var(--space-3) var(--space-4); background: none; border: 0;
+  border-bottom: 1px solid var(--border); cursor: pointer; text-align: left;
+  font-family: var(--font-sans); font-size: var(--fs-sm); color: var(--text-primary);
+}
+.suggest__row:last-child { border-bottom: 0; }
+.suggest__row:hover { background: var(--ivory-050); }
+.suggest__kind {
+  flex: none; font-size: 9px; letter-spacing: var(--ls-wide); text-transform: uppercase;
+  color: var(--text-muted); background: var(--ivory-100);
+  padding: 3px var(--space-2); border-radius: var(--radius-xs); min-width: 62px; text-align: center;
+}
+.filter-opt.is-empty { opacity: 0.4; }
+.filter-opt.is-empty input { cursor: not-allowed; }
