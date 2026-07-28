@@ -419,7 +419,10 @@
     const p = D.products.find(x => x.slug === slug) || D.products[0];
     document.title = `${p.name} — Aurelle`;
 
-    const imgs = [p.img, p.imgAlt, p.img, p.imgAlt];
+    // Gallery URLs when the admin supplied them, otherwise the two card angles.
+    const imgs = (Array.isArray(p.gallery) && p.gallery.length)
+      ? [p.img, ...p.gallery].filter(Boolean)
+      : [p.img, p.imgAlt].filter(Boolean);
     let finish = p.swatches[0].label;
     let qty = 1;
 
@@ -598,9 +601,26 @@
   }
 
   /* ================================================== CHECKOUT === */
+  const COD_FEE = 49;
+
   function checkout() {
+    /* Cashfree presents its own list of methods once the shopper is handed
+       over, so the only real choice here is online versus cash on delivery. */
+    function paintPayNote() {
+      const note = $('#payNote');
+      if (!note) return;
+      const cod = $('#pm').value === 'cod';
+      note.innerHTML = cod
+        ? `A ₹${COD_FEE} handling fee applies. Pay the courier when your parcel arrives.`
+        : `You will be taken to our payment partner to complete this securely. ` +
+          `Your card details never touch our servers.`;
+      paintSummary(C.snapshot());
+    }
+
     function paintSummary(snap) {
       const t = snap.totals;
+      const cod = $('#pm') && $('#pm').value === 'cod';
+      const fee = cod ? COD_FEE : 0;
       $('#coSummary').innerHTML = `
         <h3>Your order</h3>
         ${snap.lines.map(l => `
@@ -613,11 +633,14 @@
         <div class="totals" style="margin-top:var(--space-5)">
           <div><span>Subtotal</span><span>${inr(t.subtotal)}</span></div>
           <div><span>Shipping</span><span>${t.shipping === 0 ? 'Free' : inr(t.shipping)}</span></div>
-          <div class="is-total"><span>Total</span><span>${inr(t.total)}</span></div>
+          ${fee ? `<div><span>Cash on delivery fee</span><span>${inr(fee)}</span></div>` : ''}
+          <div class="is-total"><span>Total</span><span>${inr(t.total + fee)}</span></div>
         </div>`;
     }
     document.addEventListener('au:cart', e => paintSummary(e.detail));
     paintSummary(C.snapshot());
+    $('#pm')?.addEventListener('change', paintPayNote);
+    paintPayNote();
 
     $('#coForm').addEventListener('submit', async e => {
       e.preventDefault();
@@ -643,12 +666,30 @@
         firstName: $('#fn').value.trim(), lastName: $('#ln').value.trim(),
         email: $('#em').value.trim(), phone: $('#ph').value.replace(/\D/g, ''),
         address: $('#ad').value.trim(), city: $('#ct').value.trim(),
-        pincode: $('#pc').value.trim(), payment: $('#pm').value,
+        pincode: $('#pc').value.trim(),
+        payment: $('#pm').value === 'cod' ? 'Cash on delivery' : 'Online',
       };
 
       try {
         const order = await window.AU_API.createOrder(details, snap.lines);
         try { sessionStorage.setItem('aurelle.lastOrder', order.ref); } catch (err) {}
+
+        /* Cash on delivery needs no gateway. Everything else goes to
+           Cashfree, and the bag is only cleared once payment opens — a
+           failed hand-off must leave the shopper's bag intact. */
+        const payReady = await window.AU_API.ensurePayCfg?.() || {};
+        if ($('#pm').value !== 'cod' && payReady.enabled) {
+          btn.textContent = 'Opening payment…';
+          const paid = await window.AU_API.startPayment(order.ref);
+          if (paid === false) {
+            btn.disabled = false;
+            btn.textContent = 'Place order';
+            toast('Could not open the payment page. Your bag is safe — try again.');
+            return;
+          }
+          return;   // Cashfree takes over the page from here
+        }
+
         C.clear();
         location.href = `confirmation.html?ref=${order.ref}`;
       } catch (err) {
@@ -663,7 +704,34 @@
   function confirmation() {
     const ref = param('ref') || 'AUR000000';
     $('#confRef').textContent = ref;
-    $('#confPicks').innerHTML = D.products.filter(p => p.badge === 'Bestseller').slice(0, 4).map(productCard).join('');
+    $('#confPicks').innerHTML = D.products
+      .filter(p => p.badge === 'Bestseller').slice(0, 4).map(productCard).join('');
+
+    /* Never take the redirect's word for it — ask our server, which asks
+       the gateway. Until that answers, say nothing about payment. */
+    const note = document.createElement('p');
+    note.className = 'muted';
+    note.style.cssText = 'margin-top:var(--space-4);font-size:var(--fs-sm)';
+    $('#confRef').closest('p')?.after(note);
+
+    (async () => {
+      if (!window.AU_API.paymentsEnabled()) return;
+      note.textContent = 'Confirming your payment…';
+      try {
+        const r = await window.AU_API.verifyPayment(ref);
+        if (r.paid) {
+          note.textContent = 'Payment received. We are packing your order now.';
+          note.style.color = 'var(--success)';
+          C.clear();
+        } else {
+          note.innerHTML = 'We have not seen a payment for this order yet. ' +
+            'If you were charged it can take a minute to reach us — ' +
+            '<a href="track-order.html">check the status</a>.';
+        }
+      } catch (e) {
+        note.textContent = '';
+      }
+    })();
   }
 
   /* ================================================== WISHLIST === */

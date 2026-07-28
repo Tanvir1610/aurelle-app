@@ -169,15 +169,16 @@
    the headline and button sit mid-frame and always survive. */
 .hero--composed .hero__slides {
   width: 100%;
-  height: clamp(260px, 38vw, 580px);
+  height: clamp(240px, 33vw, 500px);
 }
 .hero--composed .hero__slide { position: absolute; inset: 0; }
-/* The artwork's logo sits near the top and its badges near the bottom, so
-   the crop is biased downward — that keeps both in frame at every width
-   rather than trimming equally from each end. */
+/* Anchored to the top so the model's face and the logo are always visible.
+   The lower part of the artwork — its own button and trust badges — is
+   allowed to crop, because a real button sits directly beneath the banner
+   and the same trust marks appear in the strip below it. */
 .hero--composed .hero__banner img {
   object-fit: cover;
-  object-position: center 70%;
+  object-position: center top;
 }
 
 /* On very wide monitors the banner would need an enormous natural height to
@@ -241,7 +242,15 @@
 }
 /* The baked-in button is part of the image, so give phones a real tap
    target underneath rather than asking them to hit a 40px graphic. */
-.hero__banner-cta { display: none; }
+/* A real button under the artwork. Larger tap target than the one drawn
+   into the image, and it survives the crop. */
+.hero__banner-cta {
+  display: inline-block;
+  margin: var(--space-5) auto 0;
+}
+.hero--composed .hero__slide {
+  display: flex; flex-direction: column; align-items: center;
+}
 
 /* The artwork has its own badges near the bottom edge, so the carousel dots
    sit under the banner rather than floating over them. */

@@ -212,18 +212,23 @@ window.AU_DATA = (function () {
 
   /* ------------------------------------------------ collections --- */
   const collections = [
-    { label: 'The Rose Edit',    sub: '18 pieces', href: 'collection.html?metal=Rose+Gold', img: 'assets/img/b-editorial-everyday.svg' },
-    { label: 'Crystal Blooms',   sub: '24 pieces', href: 'collection.html?cat=Necklace+Sets', img: 'assets/img/b-editorial-journal.svg' },
-    { label: 'Bridal by Aurelle',sub: '31 pieces', href: 'collection.html?occasion=Wedding', img: 'assets/img/b-editorial-bridal.svg' },
-    { label: 'Office Hours',     sub: '12 pieces', href: 'collection.html?occasion=Office', img: 'assets/img/b-story-atelier.svg' },
+    { label: 'The Rose Edit',    sub: '18 pieces', href: 'collection.html?metal=Rose+Gold', img: 'assets/img/cat-everyday-necklaces.jpg' },
+    { label: 'Crystal Blooms',   sub: '24 pieces', href: 'collection.html?cat=Necklace+Sets', img: 'assets/img/cat-tennis-necklaces.jpg' },
+    { label: 'Bridal by Aurelle',sub: '31 pieces', href: 'collection.html?occasion=Wedding', img: 'assets/img/cat-bridal-necklaces.jpg' },
+    { label: 'Office Hours',     sub: '12 pieces', href: 'collection.html?occasion=Office', img: 'assets/img/cat-solitaire-necklaces.jpg' },
   ];
 
   const budget = [
-    { label: 'Under ₹999',   sub: 'Everyday picks', href: 'collection.html?max=999',  img: 'assets/img/cat-earrings.svg' },
-    { label: 'Under ₹1,499', sub: 'Gifting',        href: 'collection.html?max=1499', img: 'assets/img/cat-pendants.svg' },
-    { label: 'Under ₹2,999', sub: 'Festive sets',   href: 'collection.html?max=2999', img: 'assets/img/cat-necklace-sets.svg' },
-    { label: 'Under ₹4,999', sub: 'Bridal',         href: 'collection.html?max=4999', img: 'assets/img/cat-chokers.svg' },
+    { label: 'Under ₹999',      sub: 'Everyday picks', href: 'collection.html?max=999',
+      img: 'assets/img/cat-everyday-necklaces.jpg' },
+    { label: '₹999 – ₹1,499',   sub: 'Gifting',        href: 'collection.html?max=1499',
+      img: 'assets/img/cat-pendant-necklaces.jpg' },
+    { label: '₹1,499 – ₹1,999', sub: 'Party wear',     href: 'collection.html?max=1999',
+      img: 'assets/img/cat-choker-necklaces.jpg' },
+    { label: '₹2,000+',         sub: 'Bridal',         href: 'collection.html?cat=Bridal+Necklaces',
+      img: 'assets/img/cat-bridal-necklaces.jpg' },
   ];
+;
 
   /* ---------------------------------------------------- reviews --- */
   const reviews = [
@@ -259,11 +264,11 @@ window.AU_DATA = (function () {
 
   /* ---------------------------------------------------- journal --- */
   const journal = [
-    { title: 'How to layer three chains without a single tangle', kicker: 'Styling', read: '4 min', img: 'assets/img/b-editorial-journal.svg',
+    { title: 'How to layer three chains without a single tangle', kicker: 'Styling', read: '4 min', img: 'assets/img/cat-tennis-necklaces.jpg',
       excerpt: 'Different lengths, different weights, one clasp direction. The rule that fixes it for good.' },
-    { title: 'What "anti-tarnish" actually means on a spec sheet', kicker: 'Craft', read: '6 min', img: 'assets/img/b-story-atelier.svg',
+    { title: 'What "anti-tarnish" actually means on a spec sheet', kicker: 'Craft', read: '6 min', img: 'assets/img/cat-solitaire-necklaces.jpg',
       excerpt: 'Plating thickness, base metal and the sealing coat — the three numbers worth asking any brand for.' },
-    { title: 'A seven-day wedding, planned piece by piece', kicker: 'Bridal', read: '8 min', img: 'assets/img/b-editorial-bridal.svg',
+    { title: 'A seven-day wedding, planned piece by piece', kicker: 'Bridal', read: '8 min', img: 'assets/img/cat-bridal-necklaces.jpg',
       excerpt: 'Haldi through vidaai, with weight and re-wearability considered for every single event.' },
   ];
 

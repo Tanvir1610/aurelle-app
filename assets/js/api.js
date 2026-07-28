@@ -18,6 +18,8 @@ window.AU_API = (function () {
   let online = false;
   const isOnline = () => online;
 
+  let payCfg = { enabled: false, mode: 'sandbox', appId: null };
+
   async function req(path, { method = 'GET', body, timeout = 6000, auth = true } = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
@@ -67,6 +69,15 @@ window.AU_API = (function () {
     } catch (e) {
       online = false; // static mode — entirely expected offline
     }
+
+    /* Payment availability lives on /api/config, separate from the
+       catalogue. Fetch it in the background — nothing on the page should
+       wait for it, and only checkout needs the answer. */
+    if (online) {
+      req('/api/config', { timeout: 4000, auth: false })
+        .then(cfg => { if (cfg && cfg.payments) payCfg = cfg.payments; })
+        .catch(() => { /* payments stay off */ });
+    }
     return online;
   }
 
@@ -102,5 +113,62 @@ window.AU_API = (function () {
     return req('/api/me/orders');
   }
 
-  return { init, isOnline, createOrder, trackOrder, contact, subscribe, myOrders, req };
+  /* ------------------------------------------------------ payments -- */
+  const paymentsEnabled = () => !!payCfg.enabled;
+
+  /** Checkout can be reached before the background fetch lands. */
+  async function ensurePayCfg() {
+    if (payCfg.enabled) return payCfg;
+    try {
+      const cfg = await req('/api/config', { timeout: 5000, auth: false });
+      if (cfg && cfg.payments) payCfg = cfg.payments;
+    } catch (e) { /* stays off */ }
+    return payCfg;
+  }
+
+  /** Load Cashfree's checkout SDK once, on demand. */
+  function loadCashfreeSdk() {
+    return new Promise((resolve, reject) => {
+      if (window.Cashfree) return resolve(window.Cashfree);
+      const s = document.createElement('script');
+      s.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      s.onload = () => resolve(window.Cashfree);
+      s.onerror = () => reject(new Error('Payment SDK could not load'));
+      document.head.appendChild(s);
+      setTimeout(() => { if (!window.Cashfree) reject(new Error('Payment SDK timed out')); }, 12000);
+    });
+  }
+
+  /**
+   * Open Cashfree checkout for an order we already created.
+   * Returns false when the hand-off fails, so the caller can restore the
+   * form rather than stranding the shopper on a dead page.
+   */
+  async function startPayment(ref) {
+    try {
+      await ensurePayCfg();
+      if (!payCfg.enabled) return false;
+      const session = await req('/api/payments/session', { method: 'POST', body: { ref } });
+      if (!session.paymentSessionId) return false;
+      const Cashfree = await loadCashfreeSdk();
+      const cf = Cashfree({ mode: session.mode === 'production' ? 'production' : 'sandbox' });
+      await cf.checkout({
+        paymentSessionId: session.paymentSessionId,
+        redirectTarget: '_self',
+      });
+      return true;
+    } catch (e) {
+      console.error('[pay]', e.message);
+      return false;
+    }
+  }
+
+  /** Ask our server whether the gateway actually took the money. */
+  async function verifyPayment(ref) {
+    return req(`/api/payments/verify/${encodeURIComponent(ref)}`);
+  }
+
+  return { init, isOnline, createOrder, trackOrder, contact, subscribe, myOrders,
+           paymentsEnabled, ensurePayCfg, startPayment, verifyPayment, req,
+           _setPayCfg: c => { payCfg = c || payCfg; } };
 })();
