@@ -443,16 +443,22 @@ route('GET', /^\/api\/admin\/images$/, async (req, res) => {
   let files = [];
   try { files = await readdir(dir); } catch (e) { /* no art folder */ }
 
-  const products = files.filter(f => /^p-.*\.svg$/.test(f) && !f.includes('-alt'))
+  const IMG = /\.(jpe?g|png|webp|svg)$/i;
+  const products = files
+    .filter(f => /^p-/.test(f) && IMG.test(f) && !f.includes('-alt'))
     .sort()
-    .map(f => ({ file: `assets/img/${f}`,
-                 alt: `assets/img/${f.replace('.svg', '-alt.svg')}`,
-                 label: f.replace(/^p-|\.svg$/g, '').replace(/-/g, ' ') }));
+    .map(f => {
+      const ext = f.slice(f.lastIndexOf('.'));
+      return { file: `assets/img/${f}`,
+               alt: `assets/img/${f.replace(ext, '-alt' + ext)}`,
+               label: f.replace(/^p-/, '').replace(IMG, '').replace(/-/g, ' ') };
+    });
 
-  const categories = files.filter(f => /^cat-.*\.svg$/.test(f))
+  const categories = files
+    .filter(f => /^cat-/.test(f) && IMG.test(f))
     .sort()
     .map(f => ({ file: `assets/img/${f}`, alt: `assets/img/${f}`,
-                 label: f.replace(/^cat-|\.svg$/g, '').replace(/-/g, ' ') }));
+                 label: f.replace(/^cat-/, '').replace(IMG, '').replace(/-/g, ' ') }));
 
   ok(res, { images: [...products, ...categories] });
 }, { auth: true });

@@ -92,3 +92,18 @@ Two things that are still your responsibility before trading: your refund and
 returns policy must be published on the site (mandatory for Indian
 e-commerce), and Cashfree will want your business verification completed
 before settling funds.
+
+## What the shopper chooses
+
+The checkout now offers two options, not four:
+
+- **Pay online** — UPI, card, net banking or wallet
+- **Cash on delivery** (+₹49 handling)
+
+Cashfree presents its own method list once the shopper is handed over, so
+listing UPI and cards separately on our form was misleading — whatever they
+picked was ignored a moment later.
+
+The ₹49 handling fee is applied **by the server**, from the payment method on
+the order record. A browser cannot talk its way out of it, and the amount the
+gateway is asked for always matches what we recorded.

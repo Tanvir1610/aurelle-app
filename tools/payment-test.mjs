@@ -115,5 +115,26 @@ console.log('\n── an order paid in full is required ────────
      /result\.paid && order && order\.status === 'placed'/.test(src));
 }
 
+console.log('\n── cash on delivery is priced by the server ────');
+{
+  const base = { firstName: 'A', lastName: 'B', email: 'a@b.com', phone: '9876543210',
+                 address: '1 Rd', city: 'Pune', pincode: '411001',
+                 items: [{ slug: 'ad-heart-amara', qty: 1 }] };
+  const post = body => fetch(BASE + '/api/orders', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => r.json());
+
+  const online = await post({ ...base, payment: 'Online' });
+  const cod = await post({ ...base, payment: 'Cash on delivery' });
+
+  t('an online order carries no handling fee', online.total === 878, String(online.total));
+  t('cash on delivery adds exactly the fee', cod.total - online.total === 49,
+     `${online.total} -> ${cod.total}`);
+
+  // The browser must not be able to talk its way out of the fee.
+  const spoofed = await post({ ...base, payment: 'Cash on delivery', total: 1 });
+  t('a browser-supplied total is ignored', spoofed.total === 927, String(spoofed.total));
+}
+
 console.log(`\n${pass + fail} assertions · ${pass} passed · ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

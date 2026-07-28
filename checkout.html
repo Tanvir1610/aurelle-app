@@ -31,16 +31,13 @@
 
           <h3 style="margin-top:var(--space-7)">Payment</h3>
           <div class="field">
-            <label for="pm">Method</label>
+            <label for="pm">How would you like to pay?</label>
             <select id="pm" name="payment">
-              <option>UPI</option><option>Credit or debit card</option>
-              <option>Net banking</option><option>Cash on delivery (+₹49)</option>
+              <option value="online">Pay online — UPI, card, net banking or wallet</option>
+              <option value="cod">Cash on delivery (+₹49)</option>
             </select>
           </div>
-          <p class="muted" style="font-size:var(--fs-xs)">
-            Payment is not wired up yet — this form validates and creates a local order reference.
-            The single call to replace sits in <code>app.js</code>, marked “Backend hook”.
-          </p>
+          <div id="payNote" class="muted" style="font-size:var(--fs-xs);line-height:var(--lh-relaxed)"></div>
           <button class="btn btn--gold btn--block" type="submit" style="margin-top:var(--space-5)">Place order</button>
         </form>
         <div class="panel" id="coSummary"></div>

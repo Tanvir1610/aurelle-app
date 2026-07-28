@@ -476,7 +476,10 @@ export function createOrder(payload) {
   });
 
   const shipping = subtotal >= 999 ? 0 : 79;
-  const total = subtotal + shipping;
+  /* Cash on delivery carries a handling fee. Charged here rather than trusting
+     the browser's total, so the amount the gateway sees is always ours. */
+  const codFee = /cash on delivery/i.test(String(payload.payment || '')) ? 49 : 0;
+  const total = subtotal + shipping + codFee;
   const ref = 'AUR' + String(Math.floor(100000 + Math.random() * 899999));
   const id = randomUUID();
 
