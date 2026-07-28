@@ -162,14 +162,30 @@
 /* ----------------------------------------------------------- hero --- */
 .hero { position: relative; overflow: hidden; background: var(--ivory-100); }
 .hero__slides { position: relative; height: clamp(460px, 68vh, 660px); }
-/* When every slide is a composed banner, follow the artwork's own shape
-   instead of forcing a fixed height that would crop the headline. */
+/* Composed banners span the full width at every size.
+   Note: `aspect-ratio` together with `max-height` makes the browser shrink
+   the WIDTH to preserve the ratio, which leaves a gap beside the banner.
+   So height is driven directly and the image crops top/bottom instead —
+   the headline and button sit mid-frame and always survive. */
 .hero--composed .hero__slides {
-  height: auto;
-  aspect-ratio: 1659 / 948;
-  max-height: 74vh;
+  width: 100%;
+  height: clamp(320px, 46vw, 760px);
 }
 .hero--composed .hero__slide { position: absolute; inset: 0; }
+/* The artwork's logo sits near the top and its badges near the bottom, so
+   the crop is biased downward — that keeps both in frame at every width
+   rather than trimming equally from each end. */
+.hero--composed .hero__banner img {
+  object-fit: cover;
+  object-position: center 70%;
+}
+
+/* On very wide monitors the banner would need an enormous natural height to
+   stay uncropped, so cap its width instead and let the page colour show at
+   the edges. */
+@media (min-width: 2000px) {
+  .hero--composed .hero__slides { max-width: 2000px; margin-inline: auto; }
+}
 .hero__slide {
   position: absolute; inset: 0; opacity: 0; transition: opacity var(--dur-slower) var(--ease-out);
   display: grid; place-items: center;
@@ -223,6 +239,19 @@
 /* The baked-in button is part of the image, so give phones a real tap
    target underneath rather than asking them to hit a 40px graphic. */
 .hero__banner-cta { display: none; }
+
+/* The artwork has its own badges near the bottom edge, so the carousel dots
+   sit under the banner rather than floating over them. */
+.hero--composed { padding-bottom: 0; }
+.hero--composed .hero__dots {
+  position: static;
+  transform: none;
+  justify-content: center;
+  padding-block: var(--space-4);
+  background: var(--color-bg);
+}
+.hero--composed .hero__dot { background: var(--ivory-200); }
+.hero--composed .hero__dot.is-active { background: var(--gold-500); }
 
 /* ------------------------------------------------------ USP strip --- */
 .usp { border-block: 1px solid var(--border); background: var(--color-surface); }
@@ -595,6 +624,11 @@
 
 /* --------------------------------------------------------- mobile --- */
 @media (max-width: 1024px) {
+  /* Below this the banner is narrow enough that cropping starts eating the
+     headline, so show the artwork whole. */
+  .hero--composed .hero__slides { height: auto; aspect-ratio: 1659 / 948; }
+  .hero--composed .hero__banner img { height: 100%; object-fit: contain; }
+
   .product-grid, .cat-grid, .tile-grid, .budget-grid { grid-template-columns: repeat(2, 1fr); }
   .review-grid, .store-grid { grid-template-columns: 1fr; }
   .plp { grid-template-columns: 1fr; }
@@ -629,10 +663,6 @@
     margin: var(--space-4) var(--gutter) var(--space-2);
     text-align: center;
   }
-  .hero--composed .hero__dots { position: static; transform: none;
-    justify-content: center; padding-bottom: var(--space-4); }
-  .hero--composed .hero__dot { background: var(--ivory-200); }
-  .hero--composed .hero__dot.is-active { background: var(--gold-500); }
   .burger { display: inline-flex; }
   .header__inner { grid-template-columns: auto 1fr auto; height: 62px; }
   .header__nav {
