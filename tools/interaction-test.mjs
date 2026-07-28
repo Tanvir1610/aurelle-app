@@ -19,9 +19,9 @@ const t=(name,cond,extra='')=>{ console.log((cond?'ok    ':'FAIL  ')+name+(cond?
 
 // --- PLP: deep link by category
 {
-  const {doc} = await boot('collection.html','cat=Earrings');
+  const {doc} = await boot('collection.html','cat=Tennis%20Necklaces');
   const n = doc.querySelectorAll('#plpGrid .card').length;
-  t('PLP deep-links to a category', doc.querySelector('#plpTitle').textContent==='Earrings');
+  t('PLP deep-links to a category', doc.querySelector('#plpTitle').textContent==='Tennis Necklaces');
   t('PLP shows only that category', n>0 && n<=9, `got ${n}`);
   t('PLP renders an active-filter chip', !!doc.querySelector('#activeChips .chip'));
 }
@@ -37,9 +37,9 @@ const t=(name,cond,extra='')=>{ console.log((cond?'ok    ':'FAIL  ')+name+(cond?
 }
 // --- PLP: clear all
 {
-  const {dom,doc} = await boot('collection.html','cat=Rings');
+  const {dom,doc} = await boot('collection.html','cat=Heart%20Necklaces');
   doc.querySelector('[data-clear="all"]').dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));
-  t('PLP clear-all restores full catalogue', doc.querySelector('#plpCount').textContent.startsWith('28'), doc.querySelector('#plpCount').textContent);
+  t('PLP clear-all restores full catalogue', doc.querySelector('#plpCount').textContent.startsWith('13'), doc.querySelector('#plpCount').textContent);
 }
 // --- Checkout: rejects empty, flags bad phone
 {
@@ -56,11 +56,13 @@ const t=(name,cond,extra='')=>{ console.log((cond?'ok    ':'FAIL  ')+name+(cond?
 }
 // --- PDP: swatch + qty
 {
-  const {dom,doc} = await boot('product.html','p=amara-emerald-studs');
-  t('PDP renders the right product', doc.querySelector('#pdpInfo h1').textContent==='Amara Emerald Studs');
+  const {dom,doc} = await boot('product.html','p=ad-solitaire-radiance');
+  t('PDP renders the right product', doc.querySelector('#pdpInfo h1').textContent==='Radiance Solitaire Necklace');
   doc.querySelector('#qtyUp').dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));
   t('PDP quantity stepper increments', doc.querySelector('#qtyVal').textContent==='2');
-  const sw = doc.querySelectorAll('#pdpSwatches .swatch')[1];
+  const sws = doc.querySelectorAll('#pdpSwatches .swatch');
+  t('PDP offers more than one finish', sws.length > 1, String(sws.length));
+  const sw = sws[sws.length - 1];
   sw.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));
   t('PDP finish swatch updates label', doc.querySelector('#finishLabel').textContent===sw.dataset.finish);
   doc.querySelector('#pdpAdd').dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));

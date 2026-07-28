@@ -134,7 +134,7 @@ console.log('\n── the dashboard actually fills with data ──────'
   t('the signed-in admin is named',
      text(doc.querySelector('#whoEmail')).includes('vhoratanvir1610'),
      text(doc.querySelector('#whoEmail')));
-  t('every panel is present', doc.querySelectorAll('[data-panel]').length === 7,
+  t('every panel is present', doc.querySelectorAll('[data-panel]').length === 8,
      String(doc.querySelectorAll('[data-panel]').length));
   t('the jewellery editor is present', !!doc.querySelector('#imgGrid'));
   t('no script errors at all', errs.length === 0, errs.slice(0, 3).join(' | '));

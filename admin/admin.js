@@ -17,7 +17,7 @@
   let clerkError = null;            // why it failed, if it did
   let pendingSignIn = false;        // user clicked before Clerk was ready
   let cache = { products: [], orders: [], messages: [], subs: [],
-                customers: [], guests: [], admins: [], images: [] };
+                customers: [], guests: [], admins: [], images: [], cats: [] };
 
   /* Editor working state — the piece currently open in the modal. */
   let draft = { img: null, imgAlt: null, occasion: [], swatches: [] };
@@ -797,7 +797,142 @@
     } catch (err) { alert(err.message); }
   });
 
-  /* ---------------------------------------------------- customers -- */  /* ---------------------------------------------------- customers -- */
+  /* --------------------------------------------------- categories -- */
+  let catDraft = { img: null };
+
+  function renderCats() {
+    const body = $('#catsBody');
+    if (!body) return;
+    body.innerHTML = cache.cats.length ? cache.cats.map(c => `
+      <tr${c.active ? '' : ' style="opacity:.55"'}>
+        <td><img class="tbl__thumb" src="../${esc(c.img || '')}" alt=""></td>
+        <td><span class="tbl__name">${esc(c.label)}</span>
+          <div class="tbl__sub">${esc(c.slug)}</div></td>
+        <td class="tbl__sub">${esc(c.style || '—')}</td>
+        <td class="num">${c.count}</td>
+        <td class="num tbl__sub">${c.sort}</td>
+        <td><span class="tag ${c.active ? 'tag--delivered' : 'tag--cancelled'}">
+          ${c.active ? 'Visible' : 'Hidden'}</span></td>
+        <td>
+          <button class="link-btn" data-cat-edit="${esc(c.slug)}">Edit</button>
+          <button class="link-btn" data-cat-toggle="${esc(c.slug)}"
+                  data-to="${c.active ? '0' : '1'}"
+                  style="margin-left:var(--space-3)">${c.active ? 'Disable' : 'Enable'}</button>
+          <button class="link-btn link-btn--danger" data-cat-del="${esc(c.slug)}"
+                  style="margin-left:var(--space-3)">Delete</button>
+        </td>
+      </tr>`).join('')
+      : `<tr><td colspan="7"><div class="state"><h3>No categories yet</h3>
+           <p>Add one and it appears on the storefront immediately.</p></div></td></tr>`;
+  }
+
+  const catScrim = $('#catScrim');
+
+  function renderCatImages() {
+    const host = $('#catImgGrid');
+    if (!host) return;
+    host.innerHTML = cache.images.map(im => `
+      <button type="button" class="img-opt ${catDraft.img === im.file ? 'is-active' : ''}"
+              data-cimg="${esc(im.file)}" title="${esc(im.label)}">
+        <img src="../${esc(im.file)}" alt="" loading="lazy"></button>`).join('');
+  }
+
+  $('#catImgGrid')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-cimg]');
+    if (!b) return;
+    catDraft.img = b.dataset.cimg;
+    renderCatImages();
+  });
+
+  function openCat(slug) {
+    const c = slug ? cache.cats.find(x => x.slug === slug) : null;
+    $('#catModalTitle').textContent = c ? `Edit ${c.label}` : 'Add category';
+    $('#cLabel').value = c ? c.label : '';
+    $('#cSlug').value = c ? c.slug : '';
+    $('#cSlug').readOnly = !!c;
+    $('#cStyle').value = c && c.style ? c.style : '';
+    $('#cSort').value = c ? c.sort : cache.cats.length;
+    $('#cActive').checked = c ? c.active : true;
+    catDraft.img = c ? c.img : (cache.images[0]?.file || null);
+    $('#catError').style.display = 'none';
+    $$('.field--error', catScrim).forEach(f => f.classList.remove('field--error'));
+    renderCatImages();
+    catScrim.classList.add('is-open');
+  }
+
+  $('#newCatBtn')?.addEventListener('click', () => openCat(null));
+  $('#cancelCat')?.addEventListener('click', () => catScrim.classList.remove('is-open'));
+  catScrim?.addEventListener('click', e => {
+    if (e.target === catScrim) catScrim.classList.remove('is-open');
+  });
+
+  // Typing a name suggests a slug, until the slug is edited directly.
+  let catSlugTouched = false;
+  $('#cSlug')?.addEventListener('input', () => { catSlugTouched = true; });
+  $('#cLabel')?.addEventListener('input', () => {
+    if (catSlugTouched || $('#cSlug').readOnly) return;
+    $('#cSlug').value = $('#cLabel').value.toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  });
+
+  $('#catForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = $('#catError');
+    err.style.display = 'none';
+    const body = {
+      label: $('#cLabel').value.trim(),
+      slug: $('#cSlug').value.trim().toLowerCase(),
+      style: $('#cStyle').value || null,
+      sort: Number($('#cSort').value) || 0,
+      active: $('#cActive').checked,
+      img: catDraft.img,
+    };
+    let ok = true;
+    const flag = (sel, bad) => {
+      $(sel).closest('.field').classList.toggle('field--error', bad);
+      if (bad) ok = false;
+    };
+    flag('#cLabel', !body.label);
+    flag('#cSlug', !/^[a-z0-9-]+$/.test(body.slug));
+    if (!ok) return;
+    try {
+      await api('/api/admin/categories', { method: 'POST', body });
+      catScrim.classList.remove('is-open');
+      await loadCats();
+    } catch (e2) {
+      err.textContent = e2.message;
+      err.style.display = 'block';
+    }
+  });
+
+  $('#catsBody')?.addEventListener('click', async e => {
+    const edit = e.target.closest('[data-cat-edit]');
+    if (edit) return openCat(edit.dataset.catEdit);
+
+    const tog = e.target.closest('[data-cat-toggle]');
+    if (tog) {
+      try {
+        await api(`/api/admin/categories/${tog.dataset.catToggle}`, {
+          method: 'PATCH', body: { active: tog.dataset.to === '1' },
+        });
+        await loadCats();
+      } catch (err) { alert(err.message); }
+      return;
+    }
+
+    const del = e.target.closest('[data-cat-del]');
+    if (del) {
+      const c = cache.cats.find(x => x.slug === del.dataset.catDel);
+      if (!confirm(`Delete "${c ? c.label : del.dataset.catDel}" permanently? ` +
+                   `Disabling it instead keeps it for later.`)) return;
+      try {
+        await api(`/api/admin/categories/${del.dataset.catDel}`, { method: 'DELETE' });
+        await loadCats();
+      } catch (err) { alert(err.message); }
+    }
+  });
+
+  /* ---------------------------------------------------- customers -- */
   function renderCustomers() {
     const q = $('#customerSearch').value.toLowerCase();
     const type = $('#customerType').value;
@@ -1018,11 +1153,12 @@
     renderCustomers();
   }
   async function loadAdmins()   { cache.admins = (await api('/api/admin/admins')).admins; renderAdmins(); }
+  async function loadCats()     { cache.cats = (await api('/api/admin/categories')).categories; renderCats(); }
 
   async function loadAll() {
     try {
       await Promise.all([loadStats(), loadOrders(), loadProducts(), loadMessages(),
-                         loadSubs(), loadCustomers(), loadAdmins(), loadImages()]);
+                         loadSubs(), loadCustomers(), loadAdmins(), loadImages(), loadCats()]);
     } catch (e) {
       console.error(e);
       if (token) alert(`Could not load dashboard data: ${e.message}`);

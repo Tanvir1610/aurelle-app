@@ -147,7 +147,7 @@ console.log('\n── customer order history over the API ───────�
     body: JSON.stringify({
       firstName: 'Ira', lastName: 'Shah', email: 'ira@example.com',
       phone: '9876501234', address: '9 Palm Road', city: 'Pune', pincode: '411001',
-      items: [{ slug: 'ila-floral-studs', qty: 1 }],
+      items: [{ slug: 'ad-heart-amara', qty: 1 }],
     }),
   })).json();
   t('guest checkout still works', /^AUR\d{6}$/.test(order.ref || ''), JSON.stringify(order));

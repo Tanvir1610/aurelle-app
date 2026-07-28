@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS products (
   slug        TEXT UNIQUE NOT NULL,
   name        TEXT NOT NULL,
   cat         TEXT NOT NULL,
+  subcat      TEXT,
+  style       TEXT,
+  shape       TEXT,
+  color       TEXT,
+  length      TEXT,
+  features    TEXT DEFAULT '[]',
   price       INTEGER NOT NULL,
   mrp         INTEGER NOT NULL,
   metal       TEXT NOT NULL,
@@ -91,6 +97,17 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS categories (
+  id         TEXT PRIMARY KEY,
+  slug       TEXT UNIQUE NOT NULL,
+  label      TEXT NOT NULL,
+  style      TEXT,
+  img        TEXT,
+  sort       INTEGER DEFAULT 0,
+  active     INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS customers (
   id            TEXT PRIMARY KEY,
   clerk_user_id TEXT UNIQUE NOT NULL,
@@ -125,6 +142,12 @@ CREATE TABLE IF NOT EXISTS admins (
    skipped, so this is safe to run on every boot forever.                */
 const COLUMN_MIGRATIONS = [
   ['orders', 'clerk_user_id', 'TEXT'],
+  ['products', 'subcat', 'TEXT'],
+  ['products', 'style', 'TEXT'],
+  ['products', 'shape', 'TEXT'],
+  ['products', 'color', 'TEXT'],
+  ['products', 'length', 'TEXT'],
+  ['products', 'features', "TEXT DEFAULT '[]'"],
   ['admins', 'clerk_user_id', 'TEXT'],
   ['admins', 'role', "TEXT DEFAULT 'owner'"],
 ];
@@ -323,15 +346,30 @@ export function seedIfEmpty() {
   if (c === 0) {
     const cat = readFrontendCatalogue();
     const ins = db.prepare(`INSERT INTO products
-      (id, slug, name, cat, price, mrp, metal, badge, rating, reviews, stock, blurb, img, img_alt, occasion, swatches)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+      (id, slug, name, cat, subcat, style, shape, color, length, features,
+       price, mrp, metal, badge, rating, reviews, stock, blurb, img, img_alt, occasion, swatches)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const p of cat.products) {
-      ins.run(randomUUID(), p.slug, p.name, p.cat, p.price, p.mrp, p.metal,
+      ins.run(randomUUID(), p.slug, p.name, p.cat,
+              p.subcat || null, p.style || null, p.shape || null,
+              p.color || null, p.length || null,
+              JSON.stringify(p.features || []),
+              p.price, p.mrp, p.metal,
               p.badge || null, p.rating, p.reviews, 20 + Math.floor(Math.random() * 60),
               p.blurb, p.img, p.imgAlt,
               JSON.stringify(p.occasion), JSON.stringify(p.swatches));
     }
     seeded.products = cat.products.length;
+  }
+
+  const { cc } = db.prepare('SELECT COUNT(*) AS cc FROM categories').get();
+  if (cc === 0) {
+    const cat = readFrontendCatalogue();
+    const ins = db.prepare(`INSERT INTO categories (id,slug,label,style,img,sort,active)
+                            VALUES (?,?,?,?,?,?,1)`);
+    (cat.categories || []).forEach((c, i) =>
+      ins.run(randomUUID(), c.slug, c.label, c.style || null, c.img, i));
+    seeded.categories = (cat.categories || []).length;
   }
 
   seeded.admin = ensureAdmin();
@@ -344,12 +382,18 @@ export function seedIfEmpty() {
 export function catalogue() {
   const base = readFrontendCatalogue();
   base.products = listProducts();
+  const cats = listCategories();
+  if (cats.length) base.categories = cats;
   return base;
 }
 
 function rowToProduct(r) {
   return {
-    slug: r.slug, name: r.name, cat: r.cat, price: r.price, mrp: r.mrp,
+    slug: r.slug, name: r.name, cat: r.cat,
+    subcat: r.subcat || null, style: r.style || null, shape: r.shape || null,
+    color: r.color || null, length: r.length || null,
+    features: (() => { try { return JSON.parse(r.features || '[]'); } catch (e) { return []; } })(),
+    price: r.price, mrp: r.mrp,
     metal: r.metal, badge: r.badge, rating: r.rating, reviews: r.reviews,
     stock: r.stock, blurb: r.blurb, img: r.img, imgAlt: r.img_alt,
     occasion: JSON.parse(r.occasion || '[]'),
@@ -382,18 +426,25 @@ export function upsertProduct(p) {
       db.prepare('UPDATE products SET img = ?, img_alt = ? WHERE slug = ?')
         .run(p.img, p.imgAlt || p.img, p.slug);
     }
-    db.prepare(`UPDATE products SET name=?, cat=?, price=?, mrp=?, metal=?, badge=?,
+    db.prepare(`UPDATE products SET name=?, cat=?, subcat=?, style=?, shape=?, color=?,
+                length=?, features=?, price=?, mrp=?, metal=?, badge=?,
                 stock=?, blurb=?, occasion=?, swatches=?, active=? WHERE slug=?`)
-      .run(p.name, p.cat, p.price, p.mrp, p.metal, p.badge || null,
+      .run(p.name, p.cat, p.subcat || null, p.style || null, p.shape || null,
+           p.color || null, p.length || null, JSON.stringify(p.features || []),
+           p.price, p.mrp, p.metal, p.badge || null,
            p.stock ?? 25, p.blurb || '', occ, sw, p.active === false ? 0 : 1, p.slug);
   } else {
     db.prepare(`INSERT INTO products
-      (id,slug,name,cat,price,mrp,metal,badge,rating,reviews,stock,blurb,img,img_alt,occasion,swatches)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(randomUUID(), p.slug, p.name, p.cat, p.price, p.mrp, p.metal,
+      (id,slug,name,cat,subcat,style,shape,color,length,features,
+       price,mrp,metal,badge,rating,reviews,stock,blurb,img,img_alt,occasion,swatches)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(randomUUID(), p.slug, p.name, p.cat,
+           p.subcat || null, p.style || null, p.shape || null,
+           p.color || null, p.length || null, JSON.stringify(p.features || []),
+           p.price, p.mrp, p.metal,
            p.badge || null, p.rating ?? 4.5, p.reviews ?? 0, p.stock ?? 25,
-           p.blurb || '', p.img || 'assets/img/cat-necklace-sets.svg',
-           p.imgAlt || 'assets/img/cat-earrings.svg', occ, sw);
+           p.blurb || '', p.img || 'assets/img/cat-solitaire-necklaces.jpg',
+           p.imgAlt || 'assets/img/cat-solitaire-necklaces.jpg', occ, sw);
   }
   return getProduct(p.slug, true);
 }
@@ -521,6 +572,72 @@ export function upsertCustomer({ clerkUserId, email, firstName, lastName, phone 
 
 export function getCustomerOrders(clerkUserId) {
   return listOrders({ clerkUserId, limit: 50 });
+}
+
+/* ------------------------------------------------------- categories -- */
+/** How many live products sit in this category, by name or by style. */
+function countInCategory(label) {
+  try {
+    return db.prepare(
+      `SELECT COUNT(*) AS n FROM products
+        WHERE active = 1 AND (cat = ? OR subcat = ?)`).get(label, label).n;
+  } catch (e) {
+    // older databases have no subcat column yet
+    return db.prepare('SELECT COUNT(*) AS n FROM products WHERE active=1 AND cat=?')
+      .get(label).n;
+  }
+}
+
+function catRow(r) {
+  return { slug: r.slug, label: r.label, style: r.style,
+           img: r.img, sort: r.sort, active: !!r.active,
+           count: countInCategory(r.label) };
+}
+
+export function listCategories(includeInactive = false) {
+  const sql = includeInactive
+    ? 'SELECT * FROM categories ORDER BY sort, label'
+    : 'SELECT * FROM categories WHERE active = 1 ORDER BY sort, label';
+  return db.prepare(sql).all().map(catRow);
+}
+
+export function upsertCategory(c) {
+  const slug = String(c.slug || '').toLowerCase().trim();
+  if (!/^[a-z0-9-]+$/.test(slug)) throw new Error('Slug must be lowercase letters, numbers and hyphens');
+  if (!String(c.label || '').trim()) throw new Error('Name is required');
+
+  const existing = db.prepare('SELECT id FROM categories WHERE slug = ?').get(slug);
+  if (existing) {
+    db.prepare(`UPDATE categories SET label=?, style=?, sort=?, active=?
+                ${c.img ? ', img=?' : ''} WHERE slug=?`)
+      .run(...[c.label, c.style || null, c.sort ?? 0,
+               c.active === false ? 0 : 1, ...(c.img ? [c.img] : []), slug]);
+  } else {
+    db.prepare(`INSERT INTO categories (id,slug,label,style,img,sort,active)
+                VALUES (?,?,?,?,?,?,?)`)
+      .run(randomUUID(), slug, c.label, c.style || null,
+           c.img || 'assets/img/cat-solitaire-necklaces.jpg',
+           c.sort ?? 0, c.active === false ? 0 : 1);
+  }
+  return db.prepare('SELECT * FROM categories WHERE slug = ?').get(slug);
+}
+
+export function setCategoryActive(slug, active) {
+  db.prepare('UPDATE categories SET active = ? WHERE slug = ?').run(active ? 1 : 0, slug);
+  const r = db.prepare('SELECT * FROM categories WHERE slug = ?').get(slug);
+  return r ? catRow(r) : null;
+}
+
+/** Hard delete, refused while products still sit in the category. */
+export function deleteCategory(slug) {
+  const cat = db.prepare('SELECT * FROM categories WHERE slug = ?').get(slug);
+  if (!cat) return false;
+  const inUse = countInCategory(cat.label);
+  if (inUse > 0) {
+    throw new Error(`${inUse} product${inUse === 1 ? '' : 's'} still use this category. ` +
+                    `Move them first, or disable the category instead.`);
+  }
+  return db.prepare('DELETE FROM categories WHERE slug = ?').run(slug).changes > 0;
 }
 
 /** Customers with their lifetime order stats, richest first. */

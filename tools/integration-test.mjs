@@ -89,7 +89,7 @@ let liveSlug = null;
 
   t('storefront detects the backend', win.AU_API.isOnline() === true);
   t('admin-created product reaches the shop',
-     total.startsWith('29'), `count was "${total}"`);
+     total.startsWith('14'), `count was "${total}"`);
 
   const { doc: pdp } = await page(`/product.html?p=${liveSlug}`);
   t('product page renders live data', pdp.querySelector('#pdpInfo h1').textContent === 'Integration Test Piece');

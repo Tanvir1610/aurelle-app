@@ -324,6 +324,30 @@ route('PATCH', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
 }, { auth: true });
 
 /* Artwork the admin can assign to a product. */
+/* ------------------------------------------------------ categories --- */
+route('GET', /^\/api\/admin\/categories$/, async (req, res) =>
+  ok(res, { categories: await DB.listCategories(true) }), { auth: true });
+
+route('POST', /^\/api\/admin\/categories$/, async (req, res) => {
+  const b = await readBody(req);
+  try { return ok(res, await DB.upsertCategory(b)); }
+  catch (e) { return bad(res, e.message); }
+}, { auth: true });
+
+route('PATCH', /^\/api\/admin\/categories\/([\w-]+)$/, async (req, res, m) => {
+  const { active } = await readBody(req);
+  const c = await DB.setCategoryActive(m[1], !!active);
+  return c ? ok(res, c) : bad(res, 'Category not found', 404);
+}, { auth: true });
+
+route('DELETE', /^\/api\/admin\/categories\/([\w-]+)$/, async (req, res, m) => {
+  try {
+    return await DB.deleteCategory(m[1])
+      ? ok(res, { deleted: true })
+      : bad(res, 'Category not found', 404);
+  } catch (e) { return bad(res, e.message); }
+}, { auth: true });
+
 route('GET', /^\/api\/admin\/images$/, async (req, res) => {
   const { readdir } = await import('node:fs/promises');
   const dir = resolve(ROOT, 'assets/img');

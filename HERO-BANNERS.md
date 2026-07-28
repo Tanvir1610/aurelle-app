@@ -38,6 +38,29 @@ first banner loads at high priority and the other two lazily.
 
 Change these in the `hero` array in `assets/js/data.js`.
 
+## Sizing across screen sizes
+
+The banner spans the full width at every size. Height is driven directly —
+`clamp(320px, 46vw, 760px)` — and the image crops top and bottom as needed.
+
+A note for anyone editing this: setting `aspect-ratio` together with
+`max-height` makes the browser shrink the **width** to preserve the ratio,
+which leaves a gap beside the banner. That was the first attempt and it broke
+the layout on wide screens. The stylesheet is sized by height instead, and
+there is a test that fails if the combination reappears.
+
+The crop is biased to `object-position: center 70%` because the artwork's logo
+sits near the top and its badges near the bottom. Trimming equally from both
+ends would clip one or the other on large monitors; biasing downward keeps both
+in frame from 1025px all the way to 2560px.
+
+| Screen | Banner behaviour |
+|---|---|
+| Above 2000px | Width capped at 2000px, page colour at the edges |
+| 1025–2000px | Full width, height clamped, small top/bottom crop |
+| Below 1025px | Whole artwork shown, nothing cropped |
+| Below 768px | Whole artwork plus a real button beneath it |
+
 ## On phones
 
 The baked-in text sits on the right of each image, so cropping to a short

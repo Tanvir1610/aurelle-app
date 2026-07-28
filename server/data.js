@@ -57,6 +57,10 @@ export const listAdmins = impl.listAdmins || (() => []);
 export const addAdmin  = impl.addAdmin  || notSupported('Admin management');
 export const removeAdmin = impl.removeAdmin || notSupported('Admin management');
 export const listCustomers = impl.listCustomers || (async () => []);
+export const listCategories    = impl.listCategories    || (async () => []);
+export const upsertCategory    = impl.upsertCategory    || notSupported('Category management');
+export const setCategoryActive = impl.setCategoryActive || notSupported('Category management');
+export const deleteCategory    = impl.deleteCategory    || notSupported('Category management');
 export const listGuestBuyers = impl.listGuestBuyers || (async () => []);
 
 /* SQLite-only helpers, exported when present so existing tools keep working. */

@@ -30,9 +30,11 @@
       <div class="plp">
         <aside>
           <div class="filters">
-            <div class="field" style="margin-bottom:var(--space-5)">
+            <div class="field search-wrap" style="margin-bottom:var(--space-5)">
               <label for="plpSearch">Search</label>
-              <input type="search" id="plpSearch" placeholder="Try “pearl” or “choker”">
+              <input type="search" id="plpSearch" autocomplete="off"
+                     placeholder="Try “tennis” or “bridal”">
+              <div class="suggest" id="searchSuggest" hidden></div>
             </div>
             <div id="filters"></div>
           </div>

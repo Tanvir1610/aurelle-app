@@ -20,6 +20,7 @@
       <button data-view="overview" class="is-active">Overview</button>
       <button data-view="orders">Orders <span class="pill" id="pillOrders" hidden>0</span></button>
       <button data-view="products">Products</button>
+      <button data-view="categories">Categories</button>
       <button data-view="customers">Customers</button>
       <button data-view="messages">Messages <span class="pill" id="pillMsgs" hidden>0</span></button>
       <button data-view="subscribers">Subscribers</button>
@@ -118,6 +119,22 @@
       <div class="card-box" id="messagesBody"></div>
     </section>
 
+    <!-- CATEGORIES -->
+    <section data-panel="categories" hidden>
+      <div class="page-head">
+        <div><h2>Categories</h2>
+          <p>Disabled categories vanish from the storefront but keep their products.</p></div>
+        <button class="btn btn--gold btn--sm" type="button" id="newCatBtn">Add category</button>
+      </div>
+      <div class="card-box">
+        <table class="tbl">
+          <thead><tr><th></th><th>Name</th><th>Style filter</th>
+            <th class="num">Products</th><th>Order</th><th>Status</th><th></th></tr></thead>
+          <tbody id="catsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- CUSTOMERS -->
     <section data-panel="customers" hidden>
       <div class="page-head">
@@ -197,6 +214,45 @@
   <div class="drawer__body" id="orderDrawerBody"></div>
   <div class="drawer__foot" id="orderDrawerFoot"></div>
 </aside>
+
+<!-- CATEGORY EDITOR -->
+<div class="modal-scrim" id="catScrim">
+  <form class="modal" id="catForm" novalidate style="max-width:560px">
+    <h3 id="catModalTitle">Add category</h3>
+    <div class="field-row">
+      <div class="field"><label for="cLabel">Name</label>
+        <input id="cLabel" required placeholder="Solitaire Necklaces">
+        <span class="field__err">Name is required</span></div>
+      <div class="field"><label for="cSlug">URL slug</label>
+        <input id="cSlug" required placeholder="solitaire-necklaces">
+        <span class="field__err">Lowercase letters, numbers and hyphens only</span></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="cStyle">Style filter</label>
+        <select id="cStyle">
+          <option value="">None</option>
+          <option>Solitaire</option><option>Tennis</option><option>Pendant</option>
+          <option>Choker</option><option>Layered</option><option>Statement</option>
+          <option>Minimal</option><option>Bridal</option><option>Floral</option><option>Heart</option>
+        </select></div>
+      <div class="field"><label for="cSort">Display order</label>
+        <input id="cSort" type="number" min="0" value="0"></div>
+    </div>
+    <div class="field">
+      <span class="field-label">Tile image</span>
+      <div class="img-grid" id="catImgGrid"></div>
+    </div>
+    <label class="filter-opt" style="margin-top:var(--space-3)">
+      <input type="checkbox" id="cActive" checked>
+      <span>Visible on the storefront</span>
+    </label>
+    <div id="catError" style="display:none;color:var(--red-500);font-size:var(--fs-xs);margin-top:var(--space-3)"></div>
+    <div class="modal__actions">
+      <button class="btn btn--ghost btn--sm" type="button" id="cancelCat">Cancel</button>
+      <button class="btn btn--gold btn--sm" type="submit">Save category</button>
+    </div>
+  </form>
+</div>
 
 <!-- ADD ADMIN -->
 <div class="modal-scrim" id="adminScrim">

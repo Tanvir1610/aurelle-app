@@ -98,6 +98,32 @@ console.log('\n── the carousel still works ───────────
   t('and only one is active', doc.querySelectorAll('.hero__slide.is-active').length === 1);
 }
 
+console.log('\n── the stylesheet cannot re-break the width ────');
+{
+  /* jsdom does no layout, so assert the rules themselves. `aspect-ratio`
+     together with `max-height` makes the browser shrink the WIDTH to keep
+     the ratio, which left a gap beside the banner on the live site. */
+  const css = await (await fetch(BASE + '/assets/css/site.css')).text();
+
+  const block = css.slice(css.indexOf('.hero--composed .hero__slides'));
+  const firstRule = block.slice(0, block.indexOf('}'));
+  t('the banner is sized by height, not aspect-ratio + max-height',
+     !(firstRule.includes('aspect-ratio') && firstRule.includes('max-height')),
+     firstRule.replace(/\s+/g, ' ').trim());
+  t('it is explicitly full width', /width:\s*100%/.test(firstRule));
+  t('its height is clamped to something sensible',
+     /height:\s*clamp\(/.test(firstRule), firstRule.replace(/\s+/g, ' ').trim());
+
+  t('the crop is biased so the logo and badges survive',
+     /object-position:\s*center\s+70%/.test(css));
+  t('wide screens cap the banner width instead of cropping harder',
+     /@media \(min-width: 1500px\)[\s\S]{0,200}max-width:\s*1500px/.test(css));
+  t('below 1024px the artwork is shown whole',
+     /@media \(max-width: 1024px\)[\s\S]{0,400}object-fit:\s*contain/.test(css));
+  t('phones get a real tap target',
+     /@media \(max-width: 768px\)[\s\S]{0,900}\.hero__banner-cta\s*\{[\s\S]{0,120}display:\s*block/.test(css));
+}
+
 t('no script errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 
 console.log(`\n${pass + fail} assertions · ${pass} passed · ${fail} failed\n`);

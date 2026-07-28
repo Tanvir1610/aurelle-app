@@ -44,17 +44,17 @@ console.log('\n── public API ───────────────�
      !!(r.data.hero && r.data.categories && r.data.reviews && r.data.megamenu));
 }
 {
-  const r = await call('GET', '/api/products?cat=Earrings');
+  const r = await call('GET', '/api/products?cat=Necklaces');
   t('products filter by category',
-     r.data.products.length > 0 && r.data.products.every(p => p.cat === 'Earrings'));
+     r.data.products.length > 0 && r.data.products.every(p => p.cat === 'Necklaces'));
 }
 {
   const r = await call('GET', '/api/products?max=999');
   t('products filter by price cap', r.data.products.every(p => p.price <= 999));
 }
 {
-  const r = await call('GET', '/api/products/rosevine-necklace-set');
-  t('single product by slug', r.status === 200 && r.data.name === 'Rosevine Necklace Set');
+  const r = await call('GET', '/api/products/ad-solitaire-radiance');
+  t('single product by slug', r.status === 200 && r.data.name === 'Radiance Solitaire Necklace');
   const miss = await call('GET', '/api/products/does-not-exist');
   t('unknown product is 404', miss.status === 404);
 }
@@ -65,8 +65,8 @@ const validOrder = {
   firstName: 'Ananya', lastName: 'Kulkarni', email: 'ananya@example.com',
   phone: '9876543210', address: '12 Sunrise Arcade, CG Road', city: 'Ahmedabad',
   pincode: '380009', payment: 'UPI',
-  items: [{ slug: 'rosevine-necklace-set', qty: 2, finish: 'Gold' },
-          { slug: 'ila-floral-studs', qty: 1, finish: 'Rose Gold' }],
+  items: [{ slug: 'ad-solitaire-radiance', qty: 2, finish: 'Gold' },
+          { slug: 'ad-heart-amara', qty: 1, finish: 'Rose Gold' }],
 };
 
 let orderRef = null;
@@ -74,8 +74,8 @@ let orderRef = null;
   const r = await call('POST', '/api/orders', { body: validOrder });
   t('order is created', r.status === 201 && /^AUR\d{6}$/.test(r.data.ref || ''), JSON.stringify(r.data));
   orderRef = r.data.ref;
-  // 2×2400 + 1×499 = 5299, over the free-shipping threshold
-  t('server prices the order itself', r.data.total === 5299, `got ${r.data.total}`);
+  // 2×1299 + 1×799 = 3397, over the free-shipping threshold
+  t('server prices the order itself', r.data.total === 3397, `got ${r.data.total}`);
 }
 {
   const r = await call('POST', '/api/orders', { body: { ...validOrder, phone: '12345' } });
@@ -106,10 +106,10 @@ let orderRef = null;
 }
 {
   // Stock must have moved: Rosevine started at seed level, 2 were bought.
-  const before = await call('GET', '/api/products/rosevine-necklace-set');
+  const before = await call('GET', '/api/products/ad-solitaire-radiance');
   const r = await call('POST', '/api/orders',
-    { body: { ...validOrder, items: [{ slug: 'rosevine-necklace-set', qty: 1 }] } });
-  const after = await call('GET', '/api/products/rosevine-necklace-set');
+    { body: { ...validOrder, items: [{ slug: 'ad-solitaire-radiance', qty: 1 }] } });
+  const after = await call('GET', '/api/products/ad-solitaire-radiance');
   t('stock decrements on purchase',
      after.data.stock === before.data.stock - 1,
      `${before.data.stock} → ${after.data.stock}`);
