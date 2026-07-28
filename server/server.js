@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as DB from './data.js';
 import * as Clerk from './auth-clerk.js';
+import * as Pay from './payments-cashfree.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3000);
@@ -52,6 +53,17 @@ const json = (res, code, data) => {
 };
 const ok = (res, data) => json(res, 200, data);
 const bad = (res, msg, code = 400) => json(res, code, { error: msg });
+
+async function readRaw(req, limit = 1_000_000) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > limit) throw new Error('Payload too large');
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks).toString();
+}
 
 async function readBody(req, limit = 1_000_000) {
   const chunks = [];
@@ -196,6 +208,82 @@ route('GET', /^\/api\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
   });
 });
 
+/* --------------------------------------------------------- payments -- */
+/* Open a Cashfree session for an order we already priced ourselves. The
+   browser sends a reference, never an amount. */
+route('POST', /^\/api\/payments\/session$/, async (req, res) => {
+  const { ref } = await readBody(req);
+  if (!/^AUR\d{6}$/i.test(String(ref || ''))) return bad(res, 'A valid order reference is required');
+  if (!Pay.isConfigured()) return bad(res, 'Payments are not switched on for this shop', 503);
+
+  const order = await DB.getOrder(String(ref).toUpperCase());
+  if (!order) return bad(res, 'Order not found', 404);
+  if (order.status === 'cancelled') return bad(res, 'That order was cancelled');
+
+  try {
+    const session = await Pay.createPaymentSession(order);
+    ok(res, { ...session, mode: Pay.publicConfig().mode });
+  } catch (e) {
+    console.error('[pay] session failed:', e.message);
+    bad(res, e.message);
+  }
+});
+
+/* The shopper returns here. We ask Cashfree what happened rather than
+   believing the redirect. */
+route('GET', /^\/api\/payments\/verify\/(AUR\d{6})$/i, async (req, res, m) => {
+  if (!Pay.isConfigured()) return bad(res, 'Payments are not switched on', 503);
+  const ref = m[1].toUpperCase();
+  try {
+    const result = await Pay.fetchOrderStatus(ref);
+    const order = await DB.getOrder(ref);
+
+    // Only advance the order once the gateway confirms, and only if the
+    // amount matches what we charged.
+    if (result.paid && order && order.status === 'placed') {
+      if (Math.round(Number(result.amount)) !== Math.round(Number(order.total))) {
+        console.error(`[pay] amount mismatch on ${ref}: gateway ${result.amount} vs order ${order.total}`);
+        return bad(res, 'Payment amount did not match the order');
+      }
+      await DB.setOrderStatus(ref, 'packed');
+    }
+    ok(res, { ref, paid: result.paid, status: result.status });
+  } catch (e) {
+    bad(res, e.message);
+  }
+});
+
+/* Cashfree calls this directly. It is the reliable path — a shopper who
+   closes the tab after paying still gets their order confirmed. */
+route('POST', /^\/api\/payments\/webhook$/, async (req, res) => {
+  const raw = await readRaw(req);
+  const okSig = Pay.verifyWebhook({
+    signature: req.headers['x-webhook-signature'],
+    timestamp: req.headers['x-webhook-timestamp'],
+    rawBody: raw,
+  });
+  if (!okSig) {
+    console.error('[pay] webhook rejected: bad signature');
+    return bad(res, 'Invalid signature', 401);
+  }
+
+  let payload = {};
+  try { payload = JSON.parse(raw); } catch (e) { return bad(res, 'Invalid JSON'); }
+
+  const ref = payload?.data?.order?.order_id;
+  const status = payload?.data?.payment?.payment_status;
+  if (ref && status === 'SUCCESS') {
+    try {
+      const order = await DB.getOrder(String(ref).toUpperCase());
+      if (order && order.status === 'placed') {
+        await DB.setOrderStatus(order.ref, 'packed');
+        console.log(`[pay] ${order.ref} marked paid via webhook`);
+      }
+    } catch (e) { console.error('[pay] webhook update failed:', e.message); }
+  }
+  ok(res, { received: true });
+});
+
 route('POST', /^\/api\/newsletter$/, async (req, res) => {
   const { email } = await readBody(req);
   if (!isEmail(email)) return bad(res, 'Invalid email address');
@@ -247,6 +335,7 @@ route('GET', /^\/api\/config$/, async (req, res) => {
   ok(res, {
     auth: AUTH_DRIVER,
     passwordLogin: PASSWORD_LOGIN && !!DB.db,
+    payments: Pay.publicConfig(),
     clerk: Clerk.publicConfig(),
     db: DB.DB_DRIVER,
     adminCount,
@@ -556,6 +645,10 @@ server.listen(PORT, async () => {
   console.log(`  Dashboard    http://localhost:${PORT}/admin/`);
   console.log(`  API health   http://localhost:${PORT}/api/health`);
   console.log(`\n  Data store   ${DB.DB_DRIVER}  ${DB.DB_PATH}`);
+  const payCfg = Pay.publicConfig();
+  console.log(`  Payments     ${payCfg.enabled ? payCfg.mode : 'off'}`);
+  const payWarn = Pay.configWarning();
+  if (payWarn) console.log(`  !! ${payWarn}`);
   console.log(`  Auth         ${AUTH_DRIVER}${AUTH_DRIVER === 'clerk' ? '  ' + (Clerk.frontendApi() || '') : ''}`);
   if (seeded.products) console.log(`  Seeded       ${seeded.products} products`);
   if (demoSeeded && demoSeeded.orders) console.log(`  Demo data    ${demoSeeded.orders} orders`);
