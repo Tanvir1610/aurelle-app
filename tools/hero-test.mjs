@@ -122,8 +122,13 @@ console.log('\n── the stylesheet cannot re-break the width ────');
      /@media \(min-width: 1500px\)[\s\S]{0,200}max-width:\s*1500px/.test(css));
   t('below 1024px the artwork is shown whole',
      /@media \(max-width: 1024px\)[\s\S]{0,400}object-fit:\s*contain/.test(css));
-  t('phones get a real tap target',
-     /@media \(max-width: 768px\)[\s\S]{0,1200}\.hero__banner-cta\s*\{/.test(css));
+  {
+    // Scope to the phone block. Matching across a character distance breaks
+    // the moment any rule is added above — which is exactly what happened.
+    const at = css.indexOf('@media (max-width: 768px)');
+    const mobile = at === -1 ? '' : css.slice(at, css.indexOf('@media', at + 10));
+    t('phones get a real tap target', /\.hero__banner-cta\s*\{/.test(mobile));
+  }
   t('and it is sized to its label, not full width',
      /\.hero__banner-cta\s*\{[\s\S]{0,200}width:\s*auto/.test(css));
   {

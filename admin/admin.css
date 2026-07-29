@@ -185,7 +185,20 @@ body { background: var(--ivory-100); }
 @media (max-width: 1024px) {
   .shell { grid-template-columns: 1fr; }
   .side { position: static; height: auto; flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-4); }
-  .side nav { margin: 0; grid-auto-flow: column; }
+  /* Eight items forced into one row ran off the side of every phone.
+     Scroll horizontally instead, so each stays readable and reachable. */
+  .side nav {
+    margin: 0;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex: 1 1 100%;
+    order: 3;
+  }
+  .side nav::-webkit-scrollbar { display: none; }
+  .side nav button { white-space: nowrap; }
   .side nav button { border-left: 0; border-bottom: 2px solid transparent; padding: var(--space-3); }
   .side nav button.is-active { border-left: 0; border-bottom-color: var(--gold-500); }
   .side__foot { margin: 0; border: 0; padding: 0; }
@@ -196,6 +209,15 @@ body { background: var(--ivory-100); }
 }
 @media (max-width: 640px) {
   .kpis { grid-template-columns: 1fr; }
+  /* A 240px floor forces the whole panel wider than the screen. */
+  .toolbar input, .toolbar select { min-width: 0; width: 100%; }
+  .toolbar { flex-direction: column; }
+  /* Fixed label and count columns leave almost nothing for the bar itself. */
+  .funnel__row { grid-template-columns: 74px 1fr 38px; gap: var(--space-2); }
+  .funnel__label { font-size: 10px; }
+  .modal { padding: var(--space-5); }
+  .modal__actions { flex-direction: column-reverse; }
+  .modal__actions .btn { width: 100%; }
   .modal .field-row { grid-template-columns: 1fr; }
   .tbl thead { display: none; }
   .tbl td { display: block; border: 0; padding: 4px var(--space-4); }

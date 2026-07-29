@@ -657,6 +657,25 @@
 @media (max-width: 768px) {
   :root { --section-y: 56px; --gutter: 16px; }
 
+  /* --- overflow guards ------------------------------------------------ */
+  /* A 260px floor plus side insets exceeds a 320px screen. */
+  .toast { min-width: 0; width: 100%; }
+  /* 300px basis overflowed once the section padding was counted. */
+  .newsletter__form input { flex: 1 1 100%; max-width: none; }
+  /* Two 180px buttons plus a gap cannot fit side by side on a phone. */
+  .pdp__buy .btn { flex: 1 1 100%; }
+  /* The name block's 200px floor pushed the card past the viewport. */
+  .dash-hero__who { min-width: 0; }
+  .dash-hero { padding: var(--space-5); gap: var(--space-4); }
+
+  /* --- touch targets -------------------------------------------------- */
+  /* 30-34px is below what a fingertip reliably hits. */
+  .pdp__swatches .swatch { width: 40px; height: 40px; }
+  .wishlist { width: 40px; height: 40px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .chip { padding: 8px var(--space-4); }
+  .filter-opt { padding-block: 10px; }
+
   /* Show the banner whole rather than cropping its headline away, and
      put a proper button beneath it. */
   .hero--composed .hero__slides {
