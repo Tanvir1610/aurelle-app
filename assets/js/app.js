@@ -681,10 +681,22 @@
         if ($('#pm').value !== 'cod' && payReady.enabled) {
           btn.textContent = 'Opening payment…';
           const paid = await window.AU_API.startPayment(order.ref);
-          if (paid === false) {
+          if (!paid.ok) {
             btn.disabled = false;
             btn.textContent = 'Place order';
-            toast('Could not open the payment page. Your bag is safe — try again.');
+            // Show what actually went wrong — a bare "try again" tells the
+            // shopper nothing and tells the shop owner less.
+            const box = $('#payError');
+            if (box) {
+              box.innerHTML = `<strong>Payment could not be started.</strong><br>
+                ${esc(paid.reason || 'Unknown error')}<br>
+                Your order <strong>${esc(order.ref)}</strong> is saved — you can
+                pay for it later from <a href="track-order.html">Track order</a>,
+                or choose cash on delivery above.`;
+              box.style.display = 'block';
+              box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            toast(paid.reason || 'Could not open the payment page');
             return;
           }
           return;   // Cashfree takes over the page from here

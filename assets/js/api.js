@@ -147,19 +147,27 @@ window.AU_API = (function () {
   async function startPayment(ref) {
     try {
       await ensurePayCfg();
-      if (!payCfg.enabled) return false;
+      if (!payCfg.enabled) {
+        return { ok: false, reason: 'Online payment is not switched on for this shop.' };
+      }
       const session = await req('/api/payments/session', { method: 'POST', body: { ref } });
-      if (!session.paymentSessionId) return false;
+      if (!session.paymentSessionId) {
+        return { ok: false, reason: 'The payment provider did not return a session.' };
+      }
       const Cashfree = await loadCashfreeSdk();
       const cf = Cashfree({ mode: session.mode === 'production' ? 'production' : 'sandbox' });
-      await cf.checkout({
+      const result = await cf.checkout({
         paymentSessionId: session.paymentSessionId,
         redirectTarget: '_self',
       });
-      return true;
+      // The SDK reports its own failures rather than throwing.
+      if (result && result.error) {
+        return { ok: false, reason: result.error.message || 'Payment could not be started.' };
+      }
+      return { ok: true };
     } catch (e) {
       console.error('[pay]', e.message);
-      return false;
+      return { ok: false, reason: e.message };
     }
   }
 

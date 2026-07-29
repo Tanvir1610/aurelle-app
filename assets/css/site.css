@@ -650,8 +650,8 @@
   .story { grid-template-columns: 1fr; gap: var(--space-6); }
   .cart-page { grid-template-columns: 1fr; }
   .footer__grid { grid-template-columns: 1fr 1fr; gap: var(--space-6); }
-  .usp__grid { grid-template-columns: repeat(2, 1fr); }
-  .usp__item:nth-child(3) { border-left: 0; }
+  .usp__grid { grid-template-columns: repeat(4, 1fr); }
+  .usp__item { padding-inline: var(--space-3); }
 }
 
 @media (max-width: 768px) {
@@ -670,10 +670,15 @@
   }
   .hero--composed .hero__slide.is-active { position: relative; }
   .hero__banner img { height: auto; aspect-ratio: 1659 / 948; }
+  /* Sized to its label rather than the full width — a full-bleed bar reads
+     as a section divider, not a button. */
   .hero__banner-cta {
-    display: block;
-    margin: var(--space-4) var(--gutter) var(--space-2);
-    text-align: center;
+    display: inline-block;
+    width: auto;
+    margin: var(--space-4) auto var(--space-2);
+    padding: 10px var(--space-5);
+    font-size: 11px;
+    letter-spacing: var(--ls-wide);
   }
   .burger { display: inline-flex; }
   .header__inner { grid-template-columns: auto 1fr auto; height: 62px; }
@@ -693,9 +698,22 @@
   .wordmark { font-size: 24px; }
   .gallery { grid-template-columns: 1fr; }
   .gallery__thumbs { grid-auto-flow: column; grid-auto-columns: 68px; overflow-x: auto; }
-  .usp__grid { grid-template-columns: 1fr; }
-  .usp__item { border-left: 0; border-top: 1px solid var(--border); }
-  .usp__item:first-child { border-top: 0; }
+  /* Four across on one line. Stacked vertically these four promises ate a
+     whole screen of scroll before any product appeared. */
+  .usp__grid { grid-template-columns: repeat(4, 1fr); }
+  .usp__item {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    padding: var(--space-4) 4px;
+    border-left: 1px solid var(--border);
+    border-top: 0;
+  }
+  .usp__item:first-child { border-left: 0; }
+  .usp__item svg { width: 20px; height: 20px; }
+  .usp__item strong { font-size: 10px; line-height: 1.25; }
+  .usp__item span { font-size: 9px; line-height: 1.2; }
   .field-row { grid-template-columns: 1fr; }
   .story__stats { grid-template-columns: 1fr; }
   .hero__copy h1 { font-size: 36px; }
