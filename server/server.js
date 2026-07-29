@@ -220,6 +220,14 @@ route('POST', /^\/api\/payments\/session$/, async (req, res) => {
   if (!order) return bad(res, 'Order not found', 404);
   if (order.status === 'cancelled') return bad(res, 'That order was cancelled');
 
+  /* A key/environment mismatch fails here with an opaque gateway error.
+     Say so plainly instead — it is the most common cause by far. */
+  const warn = Pay.configWarning();
+  if (warn) {
+    console.error('[pay] misconfigured:', warn);
+    return bad(res, warn, 503);
+  }
+
   try {
     const session = await Pay.createPaymentSession(order);
     ok(res, { ...session, mode: Pay.publicConfig().mode });

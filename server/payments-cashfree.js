@@ -36,12 +36,26 @@ export const isLive = () => ENV === 'production';
  */
 export function configWarning() {
   if (!isConfigured()) return null;
+
+  /* Cashfree marks environment in the secret key: cfsk_ma_prod_… versus
+     cfsk_ma_test_… . Sending production credentials to the sandbox host (or
+     the reverse) fails only at the moment a customer tries to pay, with an
+     error that does not say why — so catch it at boot instead. */
   const looksLive = /_prod_/.test(SECRET);
+  const looksTest = /_test_/.test(SECRET);
+
   if (looksLive && ENV !== 'production') {
-    return 'CASHFREE_SECRET_KEY looks like a production key but CASHFREE_ENV is not "production".';
+    return 'Your Cashfree key is a PRODUCTION key but CASHFREE_ENV is "' + ENV + '". ' +
+           'Production credentials are rejected by the sandbox host. Either set ' +
+           'CASHFREE_ENV=production, or use your sandbox credentials for testing.';
   }
-  if (!looksLive && ENV === 'production') {
-    return 'CASHFREE_ENV is "production" but the secret key does not look like a production key.';
+  if (looksTest && ENV === 'production') {
+    return 'CASHFREE_ENV is "production" but your Cashfree key is a TEST key. ' +
+           'Test credentials are rejected by the live host.';
+  }
+  if (!looksLive && !looksTest) {
+    return 'The Cashfree secret key does not look like either a test or a ' +
+           'production key. Copy it again from Developers → API Keys.';
   }
   return null;
 }
@@ -165,11 +179,19 @@ export function verifyWebhook({ signature, timestamp, rawBody }) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** What the browser is allowed to know. App ID only — never the secret. */
+/**
+ * What the browser is allowed to know: whether payments work, and which
+ * environment to point the SDK at.
+ *
+ * The App ID is deliberately NOT here. Unlike a Stripe publishable key,
+ * Cashfree's x-client-id is a server credential used to authenticate order
+ * creation. The browser only ever needs the payment_session_id our server
+ * hands back, so publishing the App ID gives away half a credential pair
+ * for nothing.
+ */
 export function publicConfig() {
   return {
     enabled: isConfigured(),
     mode: ENV === 'production' ? 'production' : 'sandbox',
-    appId: APP_ID || null,
   };
 }

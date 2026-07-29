@@ -1,5 +1,36 @@
 # Payments — Cashfree
 
+## If the payment page will not open
+
+The commonest cause by far is credentials pointed at the wrong host. Cashfree
+issues **separate** keys for sandbox and production, and each host rejects the
+other's:
+
+```
+curl https://aurelle-app.onrender.com/api/config
+```
+
+If that shows `"mode":"sandbox"` while your key is `cfsk_ma_prod_…`, that is
+the problem. Two ways out:
+
+- **Testing** — get sandbox credentials from Cashfree (Developers → API Keys →
+  switch the dashboard toggle to Sandbox) and use those with
+  `CASHFREE_ENV=sandbox`.
+- **Going live** — set `CASHFREE_ENV=production` and keep the production key.
+
+The server now refuses early on this mismatch and says which side is wrong,
+both in the boot log and on the checkout page, rather than failing with an
+opaque gateway error.
+
+## The App ID is a server credential
+
+Cashfree's App ID (`x-client-id`) authenticates order creation together with
+the secret. It is **not** a public identifier like a Stripe publishable key —
+the browser only ever needs the `payment_session_id` our server returns.
+
+It is no longer included in `/api/config`. If your App ID has been public,
+regenerate both halves of the pair.
+
 ## Rotate the key you shared
 
 The secret you pasted in chat is a **production** key (`cfsk_ma_prod_…`).

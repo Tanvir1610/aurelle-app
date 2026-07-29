@@ -28,7 +28,8 @@ console.log('\n── the secret never leaves the server ───────�
 {
   const cfg = await (await fetch(BASE + '/api/config')).json();
   t('payments are advertised', cfg.payments.enabled === true);
-  t('the App ID is public, as intended', cfg.payments.appId === 'TEST_APP_ID_123');
+  t('the App ID is NOT published — it is a server credential',
+     !('appId' in cfg.payments), JSON.stringify(cfg.payments));
   t('the secret is NOT in the config', !JSON.stringify(cfg).includes('cfsk_'),
      JSON.stringify(cfg).slice(0, 120));
   t('production is opt-in, sandbox by default', cfg.payments.mode === 'sandbox');
@@ -37,6 +38,35 @@ console.log('\n── the secret never leaves the server ───────�
 console.log('\n── a key/environment mismatch is caught ────────');
 {
   t('a sandbox key with sandbox env is fine', Pay.configWarning() === null);
+}
+{
+  /* The failure seen in production: production credentials pointed at the
+     sandbox host. Cashfree rejects them, and the shopper saw only "could not
+     open the payment page". */
+  const realSecret = process.env.CASHFREE_SECRET_KEY;
+  process.env.CASHFREE_SECRET_KEY = 'cfsk_ma_prod_example_value';
+  const fresh = await import('../server/payments-cashfree.js?bust=' + Date.now());
+  const warn = fresh.configWarning();
+  process.env.CASHFREE_SECRET_KEY = realSecret;
+
+  t('a production key on the sandbox host is flagged', !!warn, String(warn));
+  t('the warning names both sides of the mismatch',
+     /PRODUCTION/.test(warn) && /sandbox/i.test(warn), String(warn));
+  t('and says how to fix it', /CASHFREE_ENV=production/.test(warn));
+}
+
+console.log('\n── the App ID is not published ─────────────────');
+{
+  /* Cashfree's x-client-id authenticates order creation. Unlike a Stripe
+     publishable key it is a server credential — the browser only needs the
+     payment_session_id. */
+  const cfg = await (await fetch(BASE + '/api/config')).json();
+  t('the App ID is absent from the public config', !('appId' in cfg.payments),
+     JSON.stringify(cfg.payments));
+  t('no credential appears anywhere in it',
+     !/TEST_APP_ID|cfsk_/.test(JSON.stringify(cfg)));
+  t('the browser still learns which environment to use',
+     cfg.payments.mode === 'sandbox');
 }
 
 console.log('\n── amounts come from our records ───────────────');

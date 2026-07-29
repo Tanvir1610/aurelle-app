@@ -123,7 +123,19 @@ console.log('\n── the stylesheet cannot re-break the width ────');
   t('below 1024px the artwork is shown whole',
      /@media \(max-width: 1024px\)[\s\S]{0,400}object-fit:\s*contain/.test(css));
   t('phones get a real tap target',
-     /@media \(max-width: 768px\)[\s\S]{0,900}\.hero__banner-cta\s*\{[\s\S]{0,120}display:\s*block/.test(css));
+     /@media \(max-width: 768px\)[\s\S]{0,1200}\.hero__banner-cta\s*\{/.test(css));
+  t('and it is sized to its label, not full width',
+     /\.hero__banner-cta\s*\{[\s\S]{0,200}width:\s*auto/.test(css));
+  {
+    // Isolate the phone block rather than matching across an arbitrary
+    // distance, which breaks whenever a rule is added above.
+    const at = css.indexOf('@media (max-width: 768px)');
+    const mobile = at === -1 ? '' : css.slice(at, css.indexOf('@media', at + 10));
+    t('the promises sit four across on phones',
+       /\.usp__grid\s*\{\s*grid-template-columns:\s*repeat\(4/.test(mobile));
+    t('each promise stacks its icon over its label',
+       /\.usp__item\s*\{[\s\S]{0,200}flex-direction:\s*column/.test(mobile));
+  }
 }
 
 t('no script errors', errs.length === 0, errs.slice(0, 2).join(' | '));
