@@ -105,8 +105,9 @@ try {
   t('the new column defaults to null', row && row.clerk_user_id === null);
 }
 {
+  // Before the resync runs, the legacy product is simply there.
   const p = DB.getProduct('legacy-piece');
-  t('existing product still readable', !!p && p.price === 900);
+  t('an existing product is readable after migration', !!p && p.price === 900);
 }
 {
   // New tables introduced after that database was made.
@@ -117,11 +118,19 @@ try {
 {
   // The whole point of the column: linking an order to a signed-in shopper.
   DB.seedIfEmpty();
+
+  // The resync hides products the shipped catalogue no longer carries — but
+  // must never destroy them, or a legacy shop loses its own catalogue.
+  t('a retired product is hidden, not deleted',
+     !!DB.getProduct('legacy-piece', true));
+  t('and it leaves the storefront', DB.getProduct('legacy-piece') === null);
   const order = DB.createOrder({
     firstName: 'New', lastName: 'Shopper', email: 'new@example.com',
     phone: '9812345678', address: '2 New Road', city: 'Mumbai', pincode: '400050',
     payment: 'UPI', clerkUserId: 'user_test123',
-    items: [{ slug: 'legacy-piece', qty: 1 }],
+    // A product from the shipped catalogue — 'legacy-piece' is correctly
+    // retired by the catalogue resync, which is a different concern.
+    items: [{ slug: 'ad-heart-amara', qty: 1 }],
   });
   t('a new order can be placed', /^AUR\d{6}$/.test(order.ref));
   t('it records the signed-in shopper', order.clerk_user_id === 'user_test123');

@@ -3,7 +3,7 @@
  * Uses node:sqlite (built into Node 22+). No npm dependencies.
  */
 import { DatabaseSync } from 'node:sqlite';
-import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomUUID, scryptSync, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS products (
   length      TEXT,
   features    TEXT DEFAULT '[]',
   gallery     TEXT DEFAULT '[]',
+  source      TEXT DEFAULT 'seed',
   price       INTEGER NOT NULL,
   mrp         INTEGER NOT NULL,
   metal       TEXT NOT NULL,
@@ -98,6 +99,11 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS categories (
   id         TEXT PRIMARY KEY,
   slug       TEXT UNIQUE NOT NULL,
@@ -150,6 +156,7 @@ const COLUMN_MIGRATIONS = [
   ['products', 'length', 'TEXT'],
   ['products', 'features', "TEXT DEFAULT '[]'"],
   ['products', 'gallery', "TEXT DEFAULT '[]'"],
+  ['products', 'source', "TEXT DEFAULT 'seed'"],
   ['admins', 'clerk_user_id', 'TEXT'],
   ['admins', 'role', "TEXT DEFAULT 'owner'"],
 ];
@@ -344,6 +351,63 @@ export function listAdmins() {
 export function seedIfEmpty() {
   const { c } = db.prepare('SELECT COUNT(*) AS c FROM products').get();
   const seeded = { products: 0, admin: false };
+  let seeded_report = null;
+
+  /* The bundled catalogue is fingerprinted. When it changes — a new build,
+     new products, new photography — seeded rows are brought back into line.
+     Anything the admin created or edited carries source='admin' and is left
+     completely alone.
+
+     Without this, a database that already has products (a stale file on the
+     server, or one committed to the repository) permanently masks the
+     catalogue shipped with the code. */
+  const cat0 = readFrontendCatalogue();
+  const fingerprint = createHash('sha1')
+    .update(JSON.stringify(cat0.products.map(p => [p.slug, p.name, p.price, p.img])))
+    .digest('hex');
+  const seenRow = db.prepare("SELECT value FROM meta WHERE key = 'catalogue_fingerprint'").get();
+  const changed = !seenRow || seenRow.value !== fingerprint;
+
+  if (c > 0 && changed) {
+    const bundled = new Set(cat0.products.map(p => p.slug));
+    const seeded = db.prepare("SELECT slug FROM products WHERE source = 'seed'").all();
+
+    /* Retire seeded products the catalogue no longer ships — by hiding them,
+       not deleting them. A database created before this mechanism existed has
+       no source column, so everything in it defaults to 'seed'. Deleting on
+       that assumption would destroy a shop's real catalogue; hiding is
+       reversible from the dashboard in one click. */
+    const retire = db.prepare(
+      "UPDATE products SET active = 0 WHERE slug = ? AND source = 'seed'");
+    let removed = 0;
+    for (const r of seeded) {
+      if (!bundled.has(r.slug)) { retire.run(r.slug); removed++; }
+    }
+
+    // Refresh the ones it does, without disturbing stock counts.
+    const upd = db.prepare(`UPDATE products SET name=?, cat=?, subcat=?, style=?, shape=?,
+      color=?, length=?, features=?, gallery=?, price=?, mrp=?, metal=?, badge=?,
+      rating=?, reviews=?, blurb=?, img=?, img_alt=?, occasion=?, swatches=?, active=1
+      WHERE slug=? AND source='seed'`);
+    let refreshed = 0;
+    for (const p of cat0.products) {
+      const r = upd.run(p.name, p.cat, p.subcat || null, p.style || null, p.shape || null,
+        p.color || null, p.length || null, JSON.stringify(p.features || []),
+        JSON.stringify(p.gallery || []), p.price, p.mrp, p.metal, p.badge || null,
+        p.rating, p.reviews, p.blurb, p.img, p.imgAlt,
+        JSON.stringify(p.occasion), JSON.stringify(p.swatches), p.slug);
+      refreshed += r.changes;
+    }
+
+    // And add any that are new.
+    const known = new Set(db.prepare('SELECT slug FROM products').all().map(r => r.slug));
+    // Mark these as seeded, or the next resync would treat them as the
+    // admin's work and leave them frozen at today's values forever.
+    const fresh = cat0.products.filter(p => !known.has(p.slug));
+    for (const p of fresh) upsertProduct({ ...p, source: 'seed' });
+
+    seeded_report = { removed, refreshed, added: fresh.length };
+  }
 
   if (c === 0) {
     const cat = readFrontendCatalogue();
@@ -374,6 +438,11 @@ export function seedIfEmpty() {
       ins.run(randomUUID(), c.slug, c.label, c.style || null, c.img, i));
     seeded.categories = (cat.categories || []).length;
   }
+
+  // Remember the fingerprint so the next boot is a no-op unless it changes.
+  db.prepare("INSERT INTO meta (key,value) VALUES ('catalogue_fingerprint', ?) " +
+             "ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(fingerprint);
+  if (seeded_report) seeded.resync = seeded_report;
 
   seeded.admin = ensureAdmin();
   return seeded;
@@ -432,7 +501,8 @@ export function upsertProduct(p) {
     }
     db.prepare(`UPDATE products SET name=?, cat=?, subcat=?, style=?, shape=?, color=?,
                 length=?, features=?, gallery=?, price=?, mrp=?, metal=?, badge=?,
-                stock=?, blurb=?, occasion=?, swatches=?, active=? WHERE slug=?`)
+                stock=?, blurb=?, occasion=?, swatches=?, active=?,
+                source='admin' WHERE slug=?`)
       .run(p.name, p.cat, p.subcat || null, p.style || null, p.shape || null,
            p.color || null, p.length || null, JSON.stringify(p.features || []),
            JSON.stringify(p.gallery || []),
@@ -440,13 +510,13 @@ export function upsertProduct(p) {
            p.stock ?? 25, p.blurb || '', occ, sw, p.active === false ? 0 : 1, p.slug);
   } else {
     db.prepare(`INSERT INTO products
-      (id,slug,name,cat,subcat,style,shape,color,length,features,gallery,
+      (id,slug,name,cat,subcat,style,shape,color,length,features,gallery,source,
        price,mrp,metal,badge,rating,reviews,stock,blurb,img,img_alt,occasion,swatches)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(randomUUID(), p.slug, p.name, p.cat,
            p.subcat || null, p.style || null, p.shape || null,
            p.color || null, p.length || null, JSON.stringify(p.features || []),
-           JSON.stringify(p.gallery || []),
+           JSON.stringify(p.gallery || []), p.source || 'admin',
            p.price, p.mrp, p.metal,
            p.badge || null, p.rating ?? 4.5, p.reviews ?? 0, p.stock ?? 25,
            p.blurb || '', p.img || 'assets/img/cat-solitaire-necklaces.jpg',
