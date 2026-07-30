@@ -13,6 +13,9 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as DB from './data.js';
 import * as Clerk from './auth-clerk.js';
 import * as Pay from './payments-cashfree.js';
+import * as Mail from './mailer.js';
+import { sendOrderEmail, previewOrderEmail, STATUS_EMAIL } from './order-emails.js';
+import { invoicePdf } from './invoice.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3000);
@@ -344,6 +347,7 @@ route('GET', /^\/api\/config$/, async (req, res) => {
     auth: AUTH_DRIVER,
     passwordLogin: PASSWORD_LOGIN && !!DB.db,
     payments: Pay.publicConfig(),
+    mail: Mail.publicConfig(),
     clerk: Clerk.publicConfig(),
     db: DB.DB_DRIVER,
     adminCount,
@@ -416,6 +420,9 @@ route('PATCH', /^\/api\/admin\/orders\/(AUR\d{6})$/i, async (req, res, m) => {
   const { status } = await readBody(req);
   try {
     const o = await DB.setOrderStatus(m[1].toUpperCase(), status);
+    if (o && STATUS_EMAIL[status]) {
+      sendOrderEmail(STATUS_EMAIL[status], o).catch(e => console.error('[mail]', e.message));
+    }
     return o ? ok(res, { ref: o.ref, status: o.status }) : bad(res, 'Order not found', 404);
   } catch (e) { return bad(res, e.message); }
 }, { auth: true });
@@ -443,6 +450,43 @@ route('DELETE', /^\/api\/admin\/categories\/([\w-]+)$/, async (req, res, m) => {
       ? ok(res, { deleted: true })
       : bad(res, 'Category not found', 404);
   } catch (e) { return bad(res, e.message); }
+}, { auth: true });
+
+/* ---------------------------------------------------------- email --- */
+route('GET', /^\/api\/admin\/mail\/verify$/, async (req, res) =>
+  ok(res, await Mail.verifyConnection()), { auth: true });
+
+route('POST', /^\/api\/admin\/mail\/test$/, async (req, res) => {
+  const { to } = await readBody(req);
+  if (!isEmail(to)) return bad(res, 'A valid recipient is required');
+  try {
+    await Mail.sendMail({
+      to,
+      subject: `${Mail.STORE} — mail configuration test`,
+      text: 'If you are reading this, outgoing email works.',
+      html: '<p>If you are reading this, outgoing email works.</p>',
+    });
+    ok(res, { sent: true, to });
+  } catch (e) { bad(res, e.message); }
+}, { auth: true });
+
+route('GET', /^\/api\/admin\/orders\/(AUR\d{6})\/invoice$/i, async (req, res, m) => {
+  const o = await DB.getOrder(m[1].toUpperCase());
+  if (!o) return bad(res, 'Order not found', 404);
+  const pdf = invoicePdf(o, { store: Mail.STORE });
+  res.writeHead(200, {
+    'content-type': 'application/pdf',
+    'content-length': pdf.length,
+    'content-disposition': `attachment; filename="Invoice-${o.ref}.pdf"`,
+  });
+  res.end(pdf);
+}, { auth: true });
+
+route('GET', /^\/api\/admin\/orders\/(AUR\d{6})\/email\/(\w+)$/i, async (req, res, m) => {
+  const o = await DB.getOrder(m[1].toUpperCase());
+  if (!o) return bad(res, 'Order not found', 404);
+  const draft = previewOrderEmail(m[2], o);
+  return draft ? ok(res, draft) : bad(res, 'Unknown email type', 404);
 }, { auth: true });
 
 route('GET', /^\/api\/admin\/images$/, async (req, res) => {
@@ -661,6 +705,7 @@ server.listen(PORT, async () => {
   console.log(`\n  Data store   ${DB.DB_DRIVER}  ${DB.DB_PATH}`);
   const payCfg = Pay.publicConfig();
   console.log(`  Payments     ${payCfg.enabled ? payCfg.mode : 'off'}`);
+  console.log(`  Email        ${Mail.isConfigured() ? Mail.publicConfig().host + ':' + Mail.publicConfig().port : 'off'}`);
   const payWarn = Pay.configWarning();
   if (payWarn) console.log(`  !! ${payWarn}`);
   console.log(`  Auth         ${AUTH_DRIVER}${AUTH_DRIVER === 'clerk' ? '  ' + (Clerk.frontendApi() || '') : ''}`);
