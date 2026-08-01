@@ -115,6 +115,17 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id         TEXT PRIMARY KEY,
+  phone      TEXT NOT NULL,
+  code_hash  TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  attempts   INTEGER DEFAULT 0,
+  used       INTEGER DEFAULT 0,
+  ip         TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS customers (
   id            TEXT PRIMARY KEY,
   clerk_user_id TEXT UNIQUE NOT NULL,
@@ -157,6 +168,9 @@ const COLUMN_MIGRATIONS = [
   ['products', 'features', "TEXT DEFAULT '[]'"],
   ['products', 'gallery', "TEXT DEFAULT '[]'"],
   ['products', 'source', "TEXT DEFAULT 'seed'"],
+  ['customers', 'phone_verified', 'INTEGER DEFAULT 0'],
+  ['customers', 'name', 'TEXT'],
+  ['orders', 'customer_phone', 'TEXT'],
   ['admins', 'clerk_user_id', 'TEXT'],
   ['admins', 'role', "TEXT DEFAULT 'owner'"],
 ];
@@ -181,6 +195,8 @@ migrate();
 db.exec(`
 CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_clerk   ON orders(clerk_user_id);
+CREATE INDEX IF NOT EXISTS idx_otp_phone      ON otp_codes(phone, created_at);
+CREATE INDEX IF NOT EXISTS idx_cust_phone     ON customers(phone);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_items_order    ON order_items(order_id);
 `);
@@ -631,6 +647,67 @@ export function addSubscriber(email) {
 }
 export function listSubscribers() {
   return db.prepare('SELECT * FROM subscribers ORDER BY created_at DESC').all();
+}
+
+/* ------------------------------------------------------------- OTP -- */
+export function otpCreate(row) {
+  db.prepare(`INSERT INTO otp_codes (id, phone, code_hash, expires_at, ip)
+              VALUES (?,?,?,?,?)`)
+    .run(row.id, row.phone, row.code_hash, row.expires_at, row.ip || null);
+  return row.id;
+}
+
+/** Codes issued to a number within the last N seconds, newest first. */
+export function otpRecent(phone, seconds) {
+  return db.prepare(
+    `SELECT * FROM otp_codes
+      WHERE phone = ? AND created_at > datetime('now', ?)
+      ORDER BY created_at DESC`).all(phone, `-${Number(seconds)} seconds`);
+}
+
+export function otpLatest(phone) {
+  return db.prepare(
+    `SELECT * FROM otp_codes
+      WHERE phone = ? AND used = 0
+      ORDER BY created_at DESC LIMIT 1`).get(phone) || null;
+}
+
+export function otpAttempt(id) {
+  db.prepare('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?').run(id);
+}
+
+export function otpConsume(id) {
+  db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(id);
+}
+
+/** Housekeeping so the table does not grow without limit. */
+export function otpPurge() {
+  return db.prepare(
+    "DELETE FROM otp_codes WHERE created_at < datetime('now', '-2 days')").run().changes;
+}
+
+/* ------------------------------------------------- phone customers -- */
+export function getCustomerByPhone(phone) {
+  return db.prepare('SELECT * FROM customers WHERE phone = ?').get(phone) || null;
+}
+
+/** Create or update a customer identified by their mobile number. */
+export function upsertPhoneCustomer({ phone, name, email }) {
+  const existing = getCustomerByPhone(phone);
+  if (existing) {
+    db.prepare(`UPDATE customers SET phone_verified = 1, last_seen_at = datetime('now'),
+                name = COALESCE(?, name), email = COALESCE(?, email) WHERE phone = ?`)
+      .run(name || null, email || null, phone);
+    return getCustomerByPhone(phone);
+  }
+  db.prepare(`INSERT INTO customers (id, clerk_user_id, email, name, phone, phone_verified)
+              VALUES (?,?,?,?,?,1)`)
+    .run(randomUUID(), `phone:${phone}`, email || '', name || null, phone);
+  return getCustomerByPhone(phone);
+}
+
+export function getCustomerOrdersByPhone(phone) {
+  return listOrders({ limit: 50 }).filter(o => o.phone === phone || o.customer_phone === phone);
 }
 
 /* -------------------------------------------------------- customers -- */

@@ -863,3 +863,215 @@
 }
 .filter-opt.is-empty { opacity: 0.4; }
 .filter-opt.is-empty input { cursor: not-allowed; }
+
+/* ============================================================
+   MOBILE TAB BAR
+   Phones only. Mirrors the header so common destinations are
+   one tap away without opening the menu.
+   ============================================================ */
+.botnav { display: none; }
+
+@media (max-width: 768px) {
+  .botnav {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-header);
+    background: var(--color-bg); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -2px 12px rgba(26,21,18,0.06);
+  }
+  .botnav__item {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 9px 2px 7px; min-height: 52px;
+    font-family: var(--font-sans); font-size: 9px; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-muted); text-decoration: none;
+  }
+  .botnav__item.is-current { color: var(--gold-700); }
+  .botnav__item span { line-height: 1; }
+  .botnav__count {
+    position: absolute; top: 4px; left: 50%; margin-left: 4px;
+    min-width: 15px; height: 15px; padding: 0 4px;
+    background: var(--gold-500); color: var(--accent-contrast);
+    border-radius: var(--radius-pill); font-size: 9px; font-weight: var(--fw-semibold);
+    display: grid; place-items: center;
+  }
+  .botnav__count[data-count="0"] { display: none; }
+
+  /* Keep the bar clear of page content and floating elements. */
+  body { padding-bottom: 58px; }
+  .toasts { bottom: calc(58px + var(--space-4)); }
+}
+
+/* ============================================================
+   HELP CHAT
+   ============================================================ */
+.chat-launch {
+  position: fixed; right: var(--space-5); bottom: var(--space-5);
+  z-index: calc(var(--z-drawer) - 1);
+  width: 54px; height: 54px; border: 0; border-radius: var(--radius-circle);
+  background: var(--ink-900); color: var(--ivory-050); cursor: pointer;
+  display: grid; place-items: center; box-shadow: var(--shadow-lg);
+  transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.chat-launch:hover { transform: translateY(-2px); background: var(--ink-700); }
+.chat-launch__dot {
+  position: absolute; top: 12px; right: 12px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--gold-500);
+  border: 2px solid var(--ink-900);
+}
+
+.chat-panel {
+  position: fixed; right: var(--space-5); bottom: calc(var(--space-5) + 66px);
+  z-index: var(--z-drawer);
+  width: min(360px, calc(100vw - var(--space-5) * 2));
+  max-height: min(560px, calc(100vh - 150px));
+  display: none; flex-direction: column;
+  background: var(--color-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xl); overflow: hidden;
+}
+.chat-panel.is-open { display: flex; animation: au-rise var(--dur-base) var(--ease-out); }
+
+.chat-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  background: var(--ink-900); color: var(--ivory-050);
+}
+.chat-head strong { display: block; font-family: var(--font-sans); font-size: var(--fs-sm); }
+.chat-head span { font-size: var(--fs-xs); color: var(--ink-300); }
+.chat-head button {
+  background: none; border: 0; color: var(--ivory-100); cursor: pointer;
+  width: 32px; height: 32px; border-radius: var(--radius-circle);
+  display: grid; place-items: center;
+}
+.chat-head button:hover { background: rgba(255,255,255,.1); }
+
+.chat-log {
+  flex: 1; overflow-y: auto; padding: var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  background: var(--ivory-050);
+}
+.chat-msg {
+  max-width: 86%; padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md); font-size: var(--fs-sm);
+  line-height: var(--lh-relaxed); animation: au-rise var(--dur-fast) var(--ease-out);
+}
+.chat-msg--bot {
+  align-self: flex-start; background: var(--color-surface);
+  border: 1px solid var(--border); border-bottom-left-radius: var(--radius-xs);
+}
+.chat-msg--you {
+  align-self: flex-end; background: var(--ink-900); color: var(--ivory-050);
+  border-bottom-right-radius: var(--radius-xs);
+}
+.chat-msg a { color: var(--gold-700); text-decoration: underline; }
+.chat-msg--you a { color: var(--gold-300); }
+
+.chat-asks {
+  display: flex; flex-wrap: wrap; gap: var(--space-2);
+  padding: var(--space-4); border-top: 1px solid var(--border);
+  max-height: 42%; overflow-y: auto;
+}
+.chat-ask {
+  font-family: var(--font-sans); font-size: var(--fs-xs); cursor: pointer;
+  padding: 9px var(--space-4); border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong); background: var(--color-surface);
+  color: var(--text-primary); text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.chat-ask:hover { border-color: var(--gold-500); color: var(--gold-700); }
+
+@media (max-width: 768px) {
+  /* Clear the tab bar, and shrink so the launcher never covers content. */
+  .chat-launch { right: var(--space-4); bottom: calc(58px + var(--space-4)); width: 48px; height: 48px; }
+  .chat-panel {
+    right: var(--space-3); left: var(--space-3); width: auto;
+    bottom: calc(58px + var(--space-4) + 56px);
+    max-height: calc(100vh - 230px);
+  }
+  body[data-page="product"] .chat-launch { bottom: calc(58px + 68px); }
+}
+
+/* ============================================================
+   STICKY BUY BAR  (product page, phones)
+   ============================================================ */
+.pdp-sticky { display: none; }
+
+@media (max-width: 768px) {
+  .pdp-sticky {
+    display: flex; align-items: center; gap: var(--space-3);
+    position: fixed; left: 0; right: 0; bottom: 58px;
+    z-index: calc(var(--z-header) - 1);
+    background: var(--color-bg); border-top: 1px solid var(--border);
+    padding: var(--space-3) var(--gutter);
+    padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    transform: translateY(115%);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+  .pdp-sticky.is-visible { transform: translateY(0); }
+  .pdp-sticky .stepper { flex: none; }
+  .pdp-sticky .stepper button { width: 36px; height: 40px; }
+  .pdp-sticky__price {
+    flex: none; font-family: var(--font-display); font-size: var(--fs-h5); min-width: 60px;
+  }
+  .pdp-sticky__buy { flex: 1; padding: 13px var(--space-4); }
+  /* The in-page buttons would only duplicate the bar. */
+  .pdp__buy { display: none; }
+  body[data-page="product"] { padding-bottom: 126px; }
+}
+
+/* ============================================================
+   COLLECTION: FILTER / SORT ROW AND CATEGORY CHIPS
+   ============================================================ */
+.plp-mobile-bar { display: none; }
+
+@media (max-width: 1024px) {
+  .plp-mobile-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: var(--space-3); padding-block: var(--space-3);
+    border-bottom: 1px solid var(--border); margin-bottom: var(--space-4);
+  }
+  .plp-mobile-bar button, .plp-mobile-bar label {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: none; border: 0; cursor: pointer;
+    font-family: var(--font-sans); font-size: var(--fs-sm);
+    color: var(--text-primary); padding: 6px 2px;
+  }
+  .plp-mobile-bar .divider { width: 1px; height: 20px; background: var(--border); }
+
+  .cat-chips {
+    display: flex; gap: var(--space-2); overflow-x: auto;
+    padding-bottom: var(--space-3); margin-bottom: var(--space-4);
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .cat-chips::-webkit-scrollbar { display: none; }
+  .cat-chip {
+    flex: none; white-space: nowrap; cursor: pointer;
+    font-family: var(--font-sans); font-size: var(--fs-xs);
+    padding: 8px var(--space-4); border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong); background: var(--color-surface);
+    color: var(--text-secondary);
+  }
+  .cat-chip.is-active {
+    background: var(--ink-900); border-color: var(--ink-900); color: var(--ivory-050);
+  }
+  .cat-chip em { font-style: normal; opacity: .65; }
+
+  /* The sidebar becomes a sheet, opened from the Filter button. */
+  .plp > aside {
+    position: fixed; inset: 0 0 0 auto; width: min(330px, 88vw);
+    background: var(--color-bg); z-index: var(--z-modal);
+    transform: translateX(100%); transition: transform var(--dur-base) var(--ease-out);
+    overflow-y: auto; padding: var(--space-5); box-shadow: var(--shadow-xl);
+  }
+  .plp > aside.is-open { transform: translateX(0); }
+  .filter-sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-4); padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-sheet-head h3 { font-size: var(--fs-h4); }
+  .filter-sheet-foot {
+    position: sticky; bottom: 0; background: var(--color-bg);
+    padding-top: var(--space-4); margin-top: var(--space-5);
+  }
+}

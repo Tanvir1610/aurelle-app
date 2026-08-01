@@ -299,8 +299,62 @@
     $('#plpTitle').textContent = title;
     $('#plpCrumb').textContent = title;
 
+    /* ------------------------------------ category chips (phones) -- */
+    function renderCatChips() {
+      const host = $('#catChips');
+      if (!host) return;
+      const cats = (D.categories || []).filter(c => c.active !== false);
+      const total = D.products.length;
+      host.innerHTML =
+        `<button type="button" class="cat-chip${!state.cat ? ' is-active' : ''}" data-chip="">
+           All <em>(${total})</em></button>` +
+        cats.map(c => {
+          const n = D.products.filter(p => p.subcat === c.label || p.cat === c.label).length;
+          if (!n) return '';
+          return `<button type="button" class="cat-chip${state.cat === c.label ? ' is-active' : ''}"
+                    data-chip="${esc(c.label)}">${esc(c.label)} <em>(${n})</em></button>`;
+        }).join('');
+    }
+
+    $('#catChips')?.addEventListener('click', e => {
+      const b = e.target.closest('[data-chip]');
+      if (!b) return;
+      state.cat = b.dataset.chip || null;
+      state.page = 1;
+      renderCatChips(); renderFilters(); render();
+      window.scrollTo({ top: $('#plpTop').offsetTop - 80, behavior: 'smooth' });
+    });
+
+    /* ---------------------------------------- filter sheet (phones) -- */
+    const sheet = $('#filterSheet');
+    const setSheet = (open) => {
+      sheet?.classList.toggle('is-open', open);
+      document.body.style.overflow = open ? 'hidden' : '';
+    };
+    $('#openFilters')?.addEventListener('click', () => setSheet(true));
+    $('#closeFilters')?.addEventListener('click', () => setSheet(false));
+    $('#applyFilters')?.addEventListener('click', () => setSheet(false));
+
+    /** How many facets are active, shown beside the Filter button. */
+    function updateFilterCount() {
+      const n = GROUPS.reduce((a, [k]) => a + state[k].length, 0) +
+                (state.band ? 1 : 0) + (state.cat ? 1 : 0);
+      const el = $('#filterCount');
+      if (el) el.textContent = n ? `(${n})` : '';
+    }
+
+    const sortMobile = $('#plpSortMobile');
+    sortMobile?.addEventListener('change', e => {
+      state.sort = e.target.value;
+      $('#plpSort').value = e.target.value;
+      state.page = 1;
+      render();
+    });
+
+    renderCatChips();
     renderFilters();
     render();
+    updateFilterCount();
 
     $('#plpSort').value = state.sort;
     $('#plpSort').addEventListener('change', e => {
@@ -384,6 +438,7 @@
       } else return;
       state.page = 1;
       renderFilters(); render();
+      renderCatChips(); updateFilterCount();
     });
 
     document.addEventListener('click', e => {
@@ -402,6 +457,7 @@
         else state[g] = state[g].filter(v => v !== clear.dataset.val);
         state.page = 1;
         renderFilters(); render();
+        renderCatChips(); updateFilterCount();
         return;
       }
       const pg = e.target.closest('[data-page]');
@@ -541,6 +597,84 @@
       const head = e.target.closest('.accordion__head');
       if (head) head.parentElement.classList.toggle('is-open');
     });
+
+    /* ------------------------------------------- sticky buy bar (mobile) -- */
+    /* The buy panel scrolls away on a phone, so mirror it in a fixed bar.
+       It appears once the real one has left the viewport, which keeps the
+       first screen clean. */
+    (function stickyBuy() {
+      const bar = document.createElement('div');
+      bar.className = 'buybar';
+      bar.innerHTML = `
+        <div class="stepper">
+          <button type="button" id="barDown" aria-label="Decrease quantity">−</button>
+          <span id="barQty">1</span>
+          <button type="button" id="barUp" aria-label="Increase quantity">+</button>
+        </div>
+        <div class="buybar__price">
+          <strong>${inr(p.price)}</strong>
+          <span>${p.mrp > p.price ? pctOff(p.price, p.mrp) + '% off' : 'incl. taxes'}</span>
+        </div>
+        <button class="btn btn--gold" type="button" id="barAdd">Add to bag</button>`;
+      document.body.appendChild(bar);
+      document.body.classList.add('has-buybar');
+
+      // Keep the two quantity controls in step, either direction.
+      const sync = (n) => {
+        qty = Math.max(1, n);
+        $('#qtyVal').textContent = qty;
+        $('#barQty').textContent = qty;
+      };
+      $('#barUp').addEventListener('click', () => sync(qty + 1));
+      $('#barDown').addEventListener('click', () => sync(qty - 1));
+      $('#qtyUp').addEventListener('click', () => { $('#barQty').textContent = qty; });
+      $('#qtyDown').addEventListener('click', () => { $('#barQty').textContent = qty; });
+
+      $('#barAdd').addEventListener('click', () => {
+        C.add(p.slug, qty, finish);
+        toast(`${p.name} added to your bag`);
+        window.AU.openCart();
+      });
+
+      const anchor = $('#pdpAdd');
+      if (anchor && 'IntersectionObserver' in window) {
+        new IntersectionObserver(([e]) => {
+          bar.classList.toggle('is-in', !e.isIntersecting);
+        }, { rootMargin: '-10px 0px 0px 0px' }).observe(anchor);
+      } else {
+        bar.classList.add('is-in');
+      }
+    })();
+
+    /* ---------------------------------------- sticky buy bar (phones) -- */
+    const sticky = $('#pdpSticky');
+    if (sticky) {
+      $('#sPrice').textContent = inr(p.price);
+
+      const syncQty = () => {
+        $('#sQtyVal').textContent = qty;
+        $('#qtyVal').textContent = qty;
+        $('#sPrice').textContent = inr(p.price * qty);
+      };
+      $('#sQtyUp').addEventListener('click', () => { qty++; syncQty(); });
+      $('#sQtyDown').addEventListener('click', () => { qty = Math.max(1, qty - 1); syncQty(); });
+      $('#sAdd').addEventListener('click', () => {
+        C.add(p.slug, qty, finish);
+        toast(`${p.name} added to your bag`);
+        window.AU.openCart();
+      });
+
+      // Appear once the main buy button has scrolled away, so the bar is
+      // never a duplicate of what is already on screen.
+      const anchor = $('#pdpAdd');
+      if (anchor && 'IntersectionObserver' in window) {
+        new IntersectionObserver(([e]) => {
+          sticky.classList.toggle('is-visible', !e.isIntersecting);
+        }, { rootMargin: '-80px 0px 0px 0px' }).observe(anchor);
+      } else {
+        sticky.classList.add('is-visible');
+      }
+    }
 
     /* complete the look */
     const also = D.products.filter(x => x.slug !== p.slug && (x.cat === p.cat || x.metal === p.metal)).slice(0, 4);
@@ -878,9 +1012,8 @@
   /* ================================================== ACCOUNT ==== */
   function account() {
     const box = $('#accountBox');
-    let tab = 'orders';
-    let orders = [];
-    let loaded = false;
+    let step = 'phone';          // phone -> code -> register
+    let phone = '', isNew = false, devCode = null, tab = 'orders';
 
     const when = iso => {
       if (!iso) return '';
@@ -889,205 +1022,249 @@
         { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
-    const STEPS = [
-      ['placed', 'Placed'], ['packed', 'Packed'],
-      ['shipped', 'Shipped'], ['delivered', 'Delivered'],
-    ];
+    const STEPS = [['placed','Placed'],['packed','Packed'],['shipped','Shipped'],['delivered','Delivered']];
 
     function trackRail(status) {
       if (status === 'cancelled') return '';
       const at = STEPS.findIndex(s => s[0] === status);
-      return `<div class="track-rail">${STEPS.map(([key, label], i) => `
+      return `<div class="track-rail">${STEPS.map(([k, label], i) => `
         <div class="track-node ${i <= at ? 'is-done' : ''}">
           <div class="track-node__dot">${i <= at ? window.AU.icon('check', 12) : ''}</div>
-          <span>${label}</span>
-        </div>`).join('')}</div>`;
+          <span>${label}</span></div>`).join('')}</div>`;
     }
 
     function orderCard(o) {
       return `<article class="order-card">
         <div class="order-card__head">
-          <div>
-            <div class="order-card__ref">${esc(o.ref)}</div>
+          <div><div class="order-card__ref">${esc(o.ref)}</div>
             <span class="status-pill status-pill--${esc(o.status)}">${esc(o.status)}</span>
             <div class="muted" style="font-size:var(--fs-xs);margin-top:var(--space-2)">
-              Placed ${when(o.placedAt)} · delivering to ${esc(o.city)}</div>
-          </div>
-          <div style="text-align:right">
-            <div class="order-card__total">${inr(o.total)}</div>
+              Placed ${when(o.placedAt)} · to ${esc(o.city)}</div></div>
+          <div style="text-align:right"><div class="order-card__total">${inr(o.total)}</div>
             <div class="muted" style="font-size:var(--fs-xs)">
-              ${o.items.length} item${o.items.length === 1 ? '' : 's'}</div>
-          </div>
+              ${o.items.length} item${o.items.length === 1 ? '' : 's'}</div></div>
         </div>
         ${trackRail(o.status)}
         <div class="order-card__items">
           ${o.items.map(i => `<div class="order-line">
-            ${M.img(`assets/img/p-${i.slug}.svg`, i.name, { width: 52 })}
-            <div>
-              <div class="order-line__name">${esc(i.name)}</div>
-              <div class="order-line__meta">${esc(i.finish || '')} · Qty ${i.qty}</div>
-            </div>
+            ${M.img(`assets/img/p-${i.slug}.jpg`, i.name, { width: 52 })}
+            <div><div class="order-line__name">${esc(i.name)}</div>
+              <div class="order-line__meta">${esc(i.finish || '')} · Qty ${i.qty}</div></div>
             <div style="margin-left:auto;font-size:var(--fs-sm)">${inr(i.lineTotal || 0)}</div>
           </div>`).join('')}
-        </div>
-      </article>`;
+        </div></article>`;
     }
 
-    function tabBody(snap) {
-      if (tab === 'orders') {
-        if (!loaded) return '<p class="muted center">Loading your orders…</p>';
-        if (!orders.length) {
-          return `<div class="empty">
-            <h3>No orders yet</h3>
-            <p>When you buy something it will appear here, with live tracking.</p>
-            <a class="btn btn--primary" href="collection.html">Start shopping</a>
-          </div>`;
-        }
-        return orders.map(orderCard).join('');
-      }
-
-      if (tab === 'wishlist') {
-        const saved = D.products.filter(p => C.snapshot().wishlist.includes(p.slug));
-        return saved.length
-          ? `<div class="product-grid product-grid--3">${saved.map(productCard).join('')}</div>`
-          : `<div class="empty"><h3>Nothing saved</h3>
-               <p>Tap the heart on any piece and it waits for you here.</p>
-               <a class="btn btn--primary" href="collection.html">Browse jewellery</a></div>`;
-      }
-
-      // profile
-      const u = snap.user;
-      return `<div class="panel">
-        <h3>Your details</h3>
-        <table class="spec-table">
-          <tr><td>Name</td><td>${esc(u.name || '—')}</td></tr>
-          <tr><td>Email</td><td>${esc(u.email || '—')}</td></tr>
-          <tr><td>Sign-in method</td><td>One-time code by email</td></tr>
-        </table>
-        <p class="muted" style="font-size:var(--fs-xs);margin-top:var(--space-5)">
-          Your name and email come from your sign-in account. Delivery addresses
-          are captured per order at checkout.
-        </p>
-        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-6);flex-wrap:wrap">
-          <a class="btn btn--ghost btn--sm" href="collection.html">Continue shopping</a>
-          <button class="btn btn--ghost btn--sm" type="button" id="doSignOut2">Sign out</button>
+    /* ------------------------------------------------ sign-in steps -- */
+    function paintPhone(msg) {
+      box.innerHTML = `<div class="panel" style="max-width:420px;margin-inline:auto">
+        <p class="eyebrow">Sign in</p>
+        <h3>Your mobile number</h3>
+        <p class="muted" style="font-size:var(--fs-sm);margin-bottom:var(--space-5)">
+          We send a one-time code by SMS. No password to remember.</p>
+        <div class="field">
+          <label for="phInput">Mobile number</label>
+          <div style="display:flex;gap:var(--space-2);align-items:stretch">
+            <span style="display:grid;place-items:center;padding:0 var(--space-4);
+                         border:1px solid var(--border-strong);border-radius:var(--radius-xs);
+                         background:var(--ivory-050);font-size:var(--fs-sm)">+91</span>
+            <input id="phInput" type="tel" inputmode="numeric" maxlength="10"
+                   placeholder="10-digit number" style="flex:1" value="${esc(phone)}">
+          </div>
+          <span class="field__err" id="phErr" style="${msg ? 'display:block' : ''}">${esc(msg || '')}</span>
         </div>
+        <button class="btn btn--gold btn--block" type="button" id="phSend">Send code</button>
       </div>`;
+
+      const input = $('#phInput');
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/\D/g, '').slice(0, 10);
+      });
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') $('#phSend').click(); });
+
+      $('#phSend').addEventListener('click', async () => {
+        const btn = $('#phSend');
+        const val = input.value.trim();
+        if (!/^[6-9]\d{9}$/.test(val)) { paintPhone('Enter a valid 10-digit mobile number'); return; }
+        btn.disabled = true; btn.textContent = 'Sending…';
+        try {
+          const r = await window.AU_PHONE.requestCode(val);
+          phone = r.phone; isNew = r.isNew; devCode = r.devCode || null;
+          step = 'code';
+          paintCode();
+        } catch (e) {
+          paintPhone(e.message);
+        }
+      });
     }
 
+    function paintCode(msg) {
+      box.innerHTML = `<div class="panel" style="max-width:420px;margin-inline:auto">
+        <p class="eyebrow">Verify</p>
+        <h3>Enter the code</h3>
+        <p class="muted" style="font-size:var(--fs-sm);margin-bottom:var(--space-5)">
+          Sent to <strong>+91 ${esc(phone)}</strong> ·
+          <button class="link-btn" type="button" id="phChange">change</button></p>
+        ${devCode ? `<div class="login-hint" style="margin-bottom:var(--space-4)">
+          No SMS gateway configured, so the code is <strong>${esc(devCode)}</strong>.</div>` : ''}
+        <div class="field">
+          <label for="codeInput">6-digit code</label>
+          <input id="codeInput" inputmode="numeric" maxlength="6" placeholder="······"
+                 style="letter-spacing:.5em;text-align:center;font-size:20px">
+          <span class="field__err" id="codeErr" style="${msg ? 'display:block' : ''}">${esc(msg || '')}</span>
+        </div>
+        <button class="btn btn--gold btn--block" type="button" id="codeGo">Verify</button>
+        <button class="btn btn--ghost btn--block" type="button" id="codeResend"
+                style="margin-top:var(--space-3)">Send a new code</button>
+      </div>`;
+
+      const input = $('#codeInput');
+      input.focus();
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/\D/g, '').slice(0, 6);
+        if (input.value.length === 6) $('#codeGo').click();
+      });
+
+      $('#phChange').addEventListener('click', () => { step = 'phone'; paintPhone(); });
+      $('#codeResend').addEventListener('click', async () => {
+        try {
+          const r = await window.AU_PHONE.requestCode(phone);
+          devCode = r.devCode || null;
+          paintCode('A new code is on its way.');
+        } catch (e) { paintCode(e.message); }
+      });
+
+      $('#codeGo').addEventListener('click', async () => {
+        const btn = $('#codeGo');
+        if (input.value.length !== 6) { paintCode('Enter the 6-digit code'); return; }
+        btn.disabled = true; btn.textContent = 'Checking…';
+        try {
+          const r = await window.AU_PHONE.verifyCode(phone, input.value);
+          if (r.needsRegistration) { step = 'register'; paintRegister(); return; }
+          finish();
+        } catch (e) {
+          paintCode(e.message);
+        }
+      });
+    }
+
+    function paintRegister(msg) {
+      box.innerHTML = `<div class="panel" style="max-width:420px;margin-inline:auto">
+        <p class="eyebrow">Almost there</p>
+        <h3>Create your account</h3>
+        <p class="muted" style="font-size:var(--fs-sm);margin-bottom:var(--space-5)">
+          Your number <strong>+91 ${esc(phone)}</strong> is verified.</p>
+        <div class="field"><label for="regName">Your name</label>
+          <input id="regName" placeholder="Full name">
+          <span class="field__err" id="regErr" style="${msg ? 'display:block' : ''}">${esc(msg || '')}</span>
+        </div>
+        <div class="field"><label for="regEmail">Email <span class="muted">(optional)</span></label>
+          <input id="regEmail" type="email" placeholder="For order updates and invoices"></div>
+        <button class="btn btn--gold btn--block" type="button" id="regGo">Create account</button>
+      </div>`;
+
+      $('#regName').focus();
+      $('#regGo').addEventListener('click', async () => {
+        const name = $('#regName').value.trim();
+        if (name.length < 2) { paintRegister('Please tell us your name'); return; }
+        const btn = $('#regGo');
+        btn.disabled = true; btn.textContent = 'Creating…';
+        try {
+          // The code is spent by now; the module sends the ticket instead.
+          await window.AU_PHONE.verifyCode(phone, null, {
+            name, email: $('#regEmail').value.trim() || undefined,
+          });
+          finish();
+        } catch (e) {
+          paintRegister(e.message);
+        }
+      });
+    }
+
+    /** Signed in — go wherever they were originally headed. */
+    function finish() {
+      const back = window.AU_PHONE.takeReturn('account.html');
+      if (back && !/account\.html$/.test(back)) { location.href = back; return; }
+      window.AU_PHONE.load().then(paint);
+    }
+
+    /* ------------------------------------------------- signed in -- */
     function paintDashboard(snap) {
-      const u = snap.user;
-      const initials = (u.name || u.email || 'A').trim().split(/\s+/)
-        .map(w => w[0]).slice(0, 2).join('').toUpperCase();
-      const spent = orders
-        .filter(o => o.status !== 'cancelled')
+      const c = snap.customer || {};
+      const orders = c.orders || [];
+      const initials = (c.name || 'A').trim().split(/\s+/).map(w => w[0]).slice(0, 2)
+        .join('').toUpperCase();
+      const spent = orders.filter(o => o.status !== 'cancelled')
         .reduce((s, o) => s + o.total, 0);
-      const active = orders.filter(o => ['placed', 'packed', 'shipped'].includes(o.status)).length;
+      const active = orders.filter(o => ['placed','packed','shipped'].includes(o.status)).length;
+
+      const body = tab === 'orders'
+        ? (orders.length ? orders.map(orderCard).join('')
+            : `<div class="empty"><h3>No orders yet</h3>
+                 <p>When you buy something it appears here with live tracking.</p>
+                 <a class="btn btn--primary" href="collection.html">Start shopping</a></div>`)
+        : tab === 'wishlist'
+          ? (() => {
+              const saved = D.products.filter(p => C.snapshot().wishlist.includes(p.slug));
+              return saved.length
+                ? `<div class="product-grid product-grid--3">${saved.map(productCard).join('')}</div>`
+                : `<div class="empty"><h3>Nothing saved</h3>
+                     <p>Tap the heart on any piece and it waits for you here.</p>
+                     <a class="btn btn--primary" href="collection.html">Browse</a></div>`;
+            })()
+          : `<div class="panel"><h3>Your details</h3>
+              <table class="spec-table">
+                <tr><td>Name</td><td>${esc(c.name || '—')}</td></tr>
+                <tr><td>Mobile</td><td>+91 ${esc(c.phone || '')}</td></tr>
+                <tr><td>Email</td><td>${esc(c.email || 'Not given')}</td></tr>
+                <tr><td>Sign-in</td><td>One-time code by SMS</td></tr>
+              </table>
+              <button class="btn btn--ghost btn--sm" type="button" id="doSignOut2"
+                      style="margin-top:var(--space-6)">Sign out</button></div>`;
 
       box.innerHTML = `
         <div class="dash-hero">
-          <div class="dash-hero__avatar">
-            ${u.imageUrl ? `<img src="${esc(u.imageUrl)}" alt="">` : esc(initials)}
-          </div>
+          <div class="dash-hero__avatar">${esc(initials)}</div>
           <div class="dash-hero__who">
-            <p>Signed in</p>
-            <h2>${esc(u.name)}</h2>
-            <span>${esc(u.email || '')}</span>
+            <p>Signed in</p><h2>${esc(c.name || 'Your account')}</h2>
+            <span>+91 ${esc(c.phone || '')}</span>
           </div>
           <button class="btn btn--light btn--sm" type="button" id="doSignOut">Sign out</button>
         </div>
-
         <div class="dash-stats">
           <div class="dash-stat"><strong>${orders.length}</strong><span>Orders</span></div>
           <div class="dash-stat"><strong>${inr(spent)}</strong><span>Total spent</span></div>
           <div class="dash-stat"><strong>${active}</strong><span>In progress</span></div>
         </div>
-
         <div class="dash-tabs">
-          <button class="dash-tab ${tab === 'orders' ? 'is-active' : ''}" data-tab="orders">Orders</button>
-          <button class="dash-tab ${tab === 'wishlist' ? 'is-active' : ''}" data-tab="wishlist">Wishlist</button>
-          <button class="dash-tab ${tab === 'profile' ? 'is-active' : ''}" data-tab="profile">Profile</button>
+          <button class="dash-tab ${tab==='orders'?'is-active':''}" data-tab="orders">Orders</button>
+          <button class="dash-tab ${tab==='wishlist'?'is-active':''}" data-tab="wishlist">Wishlist</button>
+          <button class="dash-tab ${tab==='profile'?'is-active':''}" data-tab="profile">Profile</button>
         </div>
-        <div id="dashBody">${tabBody(snap)}</div>`;
+        <div id="dashBody">${body}</div>`;
 
-      $('#doSignOut').addEventListener('click', () => window.AU_AUTH.signOut());
-      $('#doSignOut2')?.addEventListener('click', () => window.AU_AUTH.signOut());
+      const out = () => { window.AU_PHONE.signOut(); step = 'phone'; paintPhone(); };
+      $('#doSignOut').addEventListener('click', out);
+      $('#doSignOut2')?.addEventListener('click', out);
       $$('.dash-tab').forEach(b => b.addEventListener('click', () => {
-        tab = b.dataset.tab;
-        paintDashboard(snap);
+        tab = b.dataset.tab; paintDashboard(snap);
       }));
-
-      if (!loaded) loadOrders(snap);
-    }
-
-    async function loadOrders(snap) {
-      try {
-        const res = await window.AU_API.myOrders();
-        orders = res.orders || [];
-      } catch (e) {
-        orders = [];
-      }
-      loaded = true;
-      paintDashboard(snap);
     }
 
     function paint(snap) {
-      if (!snap.ready) {
-        box.innerHTML = '<div class="panel center"><p class="muted">Loading your account…</p></div>';
-        return;
-      }
-
-      if (snap.enabled && snap.error) {
-        box.innerHTML = `<div class="panel center">
-          <p class="eyebrow">Sign-in unavailable</p>
-          <h3>We could not reach the sign-in service</h3>
-          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">${esc(snap.error)}</p>
-          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
-            Your bag and checkout still work — you can order as a guest.</p>
-          <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-6);flex-wrap:wrap">
-            <button class="btn btn--gold" type="button" id="retryAuth">Try again</button>
-            <a class="btn btn--ghost" href="collection.html">Keep shopping</a>
-          </div></div>`;
-        $('#retryAuth').addEventListener('click', () => window.AU_AUTH.retry());
-        return;
-      }
-
-      if (!snap.enabled) {
-        box.innerHTML = `<div class="panel center">
-          <p class="eyebrow">Guest checkout</p>
-          <h3>Accounts are not switched on yet</h3>
-          <p class="muted" style="font-size:var(--fs-sm);margin-top:var(--space-3)">
-            You can still order without an account, and track any order with its reference.</p>
-          <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:var(--space-6);flex-wrap:wrap">
-            <a class="btn btn--primary" href="track-order.html">Track an order</a>
-            <a class="btn btn--ghost" href="collection.html">Start shopping</a>
-          </div></div>`;
-        return;
-      }
-
-      if (!snap.signedIn) {
-        loaded = false;
-        orders = [];
-        box.innerHTML = `<div class="panel center">
-          <p class="eyebrow">Your account</p>
-          <h3>Sign in to see your orders</h3>
-          <p class="muted" style="font-size:var(--fs-sm);margin-bottom:var(--space-6)">
-            We email you a one-time code — there is no password to remember.</p>
-          <div style="display:flex;gap:var(--space-3);justify-content:center;flex-wrap:wrap">
-            <button class="btn btn--gold" type="button" id="doSignIn">Sign in</button>
-            <button class="btn btn--ghost" type="button" id="doSignUp">Create an account</button>
-          </div></div>`;
-        $('#doSignIn').addEventListener('click', () => window.AU_AUTH.signIn());
-        $('#doSignUp').addEventListener('click', () => window.AU_AUTH.signUp());
-        return;
-      }
-
-      paintDashboard(snap);
+      if (snap.signedIn && snap.customer) return paintDashboard(snap);
+      if (step === 'code') return paintCode();
+      if (step === 'register') return paintRegister();
+      paintPhone();
     }
 
     box.innerHTML = '<div class="panel center"><p class="muted">Loading your account…</p></div>';
-    if (window.AU_AUTH) window.AU_AUTH.subscribe(paint);
-    else paint({ enabled: false, ready: true });
+    if (window.AU_PHONE) {
+      window.AU_PHONE.subscribe(paint);
+      window.AU_PHONE.load();
+    } else {
+      paintPhone();
+    }
   }
 
   /* ==================================================== BOOT ===== */

@@ -55,6 +55,10 @@ window.AU = (function () {
     phone:  '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
     mail:   '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
     plus:   '<path d="M12 5v14M5 12h14"/>',
+    home:   '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+    grid:   '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    flame:  '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/>',
+    chat:   '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8A8.5 8.5 0 0 1 12.5 20a8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5a8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/>',
   };
 
   function icon(name, size) {
@@ -183,6 +187,26 @@ window.AU = (function () {
     </div>
   </div>
 </header>`;
+  }
+
+  /* ----------------------------------------------- bottom nav (mobile) -- */
+  /* Primary navigation within thumb reach. Hidden above 768px, where the
+     header already does this job. */
+  function botnavHTML(active) {
+    const items = [
+      ['Home', 'index.html', 'home', null],
+      ['Category', 'collection.html', 'grid', null],
+      ['Trending', 'collection.html?sort=popular', 'flame', null],
+      ['Stores', 'stores.html', 'pin', null],
+      ['Account', 'account.html', 'user', null],
+    ];
+    return `<nav class="botnav" aria-label="Primary, mobile">
+      ${items.map(([label, href, ic]) => `
+        <a class="botnav__item${active === label ? ' is-current' : ''}" href="${href}"
+           ${active === label ? 'aria-current="page"' : ''}>
+          ${icon(ic, 21)}<span>${label}</span>
+        </a>`).join('')}
+    </nav>`;
   }
 
   /* ------------------------------------------------------ footer -- */
@@ -433,18 +457,104 @@ window.AU = (function () {
     });
   }
 
+  /* ------------------------------------------------------- help chat -- */
+  /* Answers come from the FAQ content, so there is one source of truth and
+     nothing here can contradict the FAQ page. */
+  function chatHTML() {
+    return `
+<button class="chat-launch" id="chatLaunch" type="button" aria-label="Open help">
+  ${icon('chat', 22)}<span class="chat-launch__dot"></span>
+</button>
+<aside class="chat-panel" id="chatPanel" role="dialog" aria-label="Help">
+  <div class="chat-head">
+    <div><strong>Aurelle help</strong><span>Answers in a tap</span></div>
+    <button type="button" id="chatClose" aria-label="Close help">${icon('x', 18)}</button>
+  </div>
+  <div class="chat-log" id="chatLog"></div>
+  <div class="chat-asks" id="chatAsks"></div>
+</aside>`;
+  }
+
+  function wireChat() {
+    const panel = $('#chatPanel'), log = $('#chatLog'), asks = $('#chatAsks');
+    if (!panel) return;
+
+    const faqs = (D().faqs || []);
+    /* A few shop-specific answers the FAQ does not cover. */
+    const extra = [
+      { q: 'Where is my order?',
+        a: 'Enter your order reference on the <a href="track-order.html">Track order</a> page ' +
+           'and you will see exactly where it is. References look like AUR123456 and are in ' +
+           'your confirmation email.' },
+      { q: 'What does delivery cost?',
+        a: 'Free above ₹999. Below that a flat ₹79 applies. Cash on delivery adds ₹49.' },
+      { q: 'Do you have a store near me?',
+        a: 'Six stores across India. The <a href="stores.html">store locator</a> has addresses ' +
+           'and opening hours.' },
+      { q: 'Talk to a person',
+        a: 'Write to care@aurelle.example or call +91 79 4000 1204, Monday to Saturday, ' +
+           '10:00–19:00 IST. You can also use the <a href="contact.html">contact form</a> — ' +
+           'we reply within two working days.' },
+    ];
+    const topics = [...faqs.map(f => ({ q: f.q, a: esc(f.a) })), ...extra];
+
+    function say(who, html) {
+      const el = document.createElement('div');
+      el.className = `chat-msg chat-msg--${who}`;
+      el.innerHTML = html;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function paintAsks() {
+      asks.innerHTML = topics
+        .map((t, i) => `<button class="chat-ask" type="button" data-ask="${i}">${esc(t.q)}</button>`)
+        .join('');
+    }
+
+    let opened = false;
+    function open() {
+      panel.classList.add('is-open');
+      if (!opened) {
+        opened = true;
+        say('bot', 'Hello. Pick a question below and I will answer it straight away — ' +
+                   'or write to us and a person will reply within two working days.');
+        paintAsks();
+      }
+    }
+    const close = () => panel.classList.remove('is-open');
+
+    $('#chatLaunch')?.addEventListener('click', () =>
+      panel.classList.contains('is-open') ? close() : open());
+    $('#chatClose')?.addEventListener('click', close);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && panel.classList.contains('is-open')) close();
+    });
+
+    asks.addEventListener('click', e => {
+      const b = e.target.closest('[data-ask]');
+      if (!b) return;
+      const topic = topics[Number(b.dataset.ask)];
+      say('me', esc(topic.q));
+      // A beat before answering, so it reads as a reply rather than a page load.
+      setTimeout(() => say('bot', topic.a), 260);
+    });
+  }
+
   /** Called by every page: paints chrome, then hands control back. */
   function mount(activeNav) {
     const head = document.createElement('div');
     head.innerHTML = headerHTML(activeNav);
     document.body.prepend(head);
 
-    document.body.insertAdjacentHTML('beforeend', drawerHTML() + footerHTML());
+    document.body.insertAdjacentHTML('beforeend',
+      drawerHTML() + footerHTML() + botnavHTML(activeNav) + chatHTML());
 
     announceRotator();
     wireGlobal();
     wireCounts();
     wireAccount();
+    wireChat();
     reveal();
   }
 

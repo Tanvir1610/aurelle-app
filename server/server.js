@@ -14,6 +14,7 @@ import * as DB from './data.js';
 import * as Clerk from './auth-clerk.js';
 import * as Pay from './payments-cashfree.js';
 import * as Mail from './mailer.js';
+import * as SMS from './sms.js';
 import { sendOrderEmail, previewOrderEmail, STATUS_EMAIL } from './order-emails.js';
 import { invoicePdf } from './invoice.js';
 
@@ -311,6 +312,101 @@ route('POST', /^\/api\/contact$/, async (req, res) => {
   json(res, 201, { received: true });
 });
 
+/* ------------------------------------------------------ phone login --- */
+/* Step one: the shopper gives a mobile number. We say whether they are
+   already known, so the browser can show sign-in or registration — but we
+   send a code either way, so the response cannot be used to discover which
+   numbers have accounts without also triggering a real SMS. */
+route('POST', /^\/api\/auth\/otp\/request$/, async (req, res) => {
+  const { phone } = await readBody(req);
+  const normalised = SMS.normalisePhone(phone);
+  if (!normalised) return bad(res, 'Enter a valid 10-digit mobile number');
+
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const result = await SMS.requestOtp(DB, normalised, { ip });
+  if (!result.ok) return json(res, 429, { error: result.reason, retryAfter: result.retryAfter });
+
+  const known = DB.getCustomerByPhone ? DB.getCustomerByPhone(normalised) : null;
+  ok(res, {
+    sent: true,
+    phone: normalised,
+    isNew: !known,
+    ttlMinutes: SMS.TTL_MINUTES,
+    // Present only when no gateway is configured, so development works.
+    devCode: result.devCode || undefined,
+  });
+});
+
+/* Step two: verify. A new customer must also supply a name. */
+route('POST', /^\/api\/auth\/otp\/verify$/, async (req, res) => {
+  const { phone, code, name, email, regToken } = await readBody(req);
+
+  /* Completing registration presents the ticket issued a moment ago rather
+     than the code, which has already been spent. */
+  let check;
+  if (regToken) {
+    const claims = verify(regToken);
+    if (!claims || claims.kind !== 'registration') {
+      return bad(res, 'That registration link has expired. Ask for a new code.', 401);
+    }
+    if (SMS.normalisePhone(phone) !== claims.phone) {
+      return bad(res, 'That code was issued for a different number', 401);
+    }
+    check = { ok: true, phone: claims.phone };
+  } else {
+    check = SMS.verifyOtp(DB, phone, code);
+  }
+  if (!check.ok) return bad(res, check.reason, 401);
+
+  const existing = DB.getCustomerByPhone(check.phone);
+  if (!existing && !String(name || '').trim()) {
+    /* The code is now spent — it must be, or it could be replayed. Hand back
+       a short-lived signed ticket instead, which proves the number was
+       verified without letting the code be reused. */
+    const regToken = sign({ sub: `reg:${check.phone}`, phone: check.phone,
+                            kind: 'registration', exp: Date.now() + 10 * 60 * 1000 });
+    return json(res, 200, {
+      verified: true, needsRegistration: true, phone: check.phone, regToken,
+    });
+  }
+  if (email && !isEmail(email)) return bad(res, 'Enter a valid email address, or leave it blank');
+
+  const customer = DB.upsertPhoneCustomer({
+    phone: check.phone, name: name || (existing && existing.name), email: email || null,
+  });
+
+  const token = sign({ sub: `phone:${check.phone}`, phone: check.phone,
+                       name: customer.name, email: customer.email,
+                       kind: 'customer', exp: Date.now() + 30 * 24 * 3600 * 1000 });
+
+  ok(res, {
+    token,
+    customer: { phone: customer.phone, name: customer.name, email: customer.email },
+    isNew: !existing,
+  });
+});
+
+/* The signed-in shopper's own record and orders. */
+route('GET', /^\/api\/me\/phone$/, async (req, res) => {
+  const header = req.headers.authorization || '';
+  const raw = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const claims = raw ? verify(raw) : null;
+  if (!claims || !claims.phone) return bad(res, 'Sign in required', 401);
+
+  const customer = DB.getCustomerByPhone(claims.phone);
+  const orders = DB.getCustomerOrdersByPhone(claims.phone) || [];
+  ok(res, {
+    customer: customer
+      ? { phone: customer.phone, name: customer.name, email: customer.email }
+      : { phone: claims.phone, name: claims.name },
+    orders: orders.map(o => ({
+      ref: o.ref, status: o.status, total: o.total, placedAt: o.created_at, city: o.city,
+      items: (o.items || []).map(i => ({ name: i.name, qty: i.qty, finish: i.finish,
+                                         slug: i.slug, lineTotal: i.line_total })),
+    })),
+  });
+});
+
 /* ------------------------------------------------------------ auth --- */
 route('POST', /^\/api\/auth\/login$/, async (req, res) => {
   const { email, password } = await readBody(req);
@@ -348,6 +444,7 @@ route('GET', /^\/api\/config$/, async (req, res) => {
     passwordLogin: PASSWORD_LOGIN && !!DB.db,
     payments: Pay.publicConfig(),
     mail: Mail.publicConfig(),
+    sms: SMS.publicConfig(),
     clerk: Clerk.publicConfig(),
     db: DB.DB_DRIVER,
     adminCount,
@@ -708,6 +805,10 @@ server.listen(PORT, async () => {
   console.log(`  Email        ${Mail.isConfigured() ? Mail.publicConfig().host + ':' + Mail.publicConfig().port : 'off'}`);
   const payWarn = Pay.configWarning();
   if (payWarn) console.log(`  !! ${payWarn}`);
+  const smsCfg = SMS.publicConfig();
+  console.log(`  SMS login    ${smsCfg.delivers ? 'live via ' + smsCfg.sender : 'codes logged (no gateway)'}`);
+  const smsWarn = SMS.configWarning();
+  if (smsWarn) console.log(`  !! ${smsWarn}`);
   console.log(`  Auth         ${AUTH_DRIVER}${AUTH_DRIVER === 'clerk' ? '  ' + (Clerk.frontendApi() || '') : ''}`);
   if (seeded.products) console.log(`  Seeded       ${seeded.products} products`);
   if (demoSeeded && demoSeeded.orders) console.log(`  Demo data    ${demoSeeded.orders} orders`);
