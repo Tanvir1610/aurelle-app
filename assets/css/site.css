@@ -278,7 +278,7 @@
 .usp__item span { font-size: var(--fs-xs); color: var(--text-secondary); }
 
 /* --------------------------------------------------- category rail -- */
-.cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); }
+.cat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
 .cat-tile { display: block; text-align: center; }
 .cat-tile__img {
   aspect-ratio: 1; overflow: hidden; border-radius: var(--radius-sm);
@@ -295,8 +295,8 @@
 .cat-tile:hover h3 { color: var(--gold-700); }
 
 /* -------------------------------------------------- product cards --- */
-.product-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); }
-.product-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
+.product-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .card { position: relative; background: var(--color-surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; display: flex; flex-direction: column; }
 .card__media { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--ivory-100); }
@@ -353,8 +353,8 @@
 .swatch:hover, .swatch[aria-pressed="true"] { transform: scale(1.15); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--gold-500); }
 
 /* ------------------------------------------------- editorial tiles -- */
-.tile-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); }
-.tile-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.tile-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
+.tile-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tile {
   position: relative; display: block; overflow: hidden; border-radius: var(--radius-sm);
   aspect-ratio: 3/4; background: var(--ivory-100);
@@ -367,7 +367,7 @@
 .tile__body h3 { font-size: var(--fs-h4); color: var(--ivory-050); }
 .tile__body span { font-size: var(--fs-xs); letter-spacing: var(--ls-wide); text-transform: uppercase; color: var(--gold-300); }
 
-.budget-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); }
+.budget-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
 .budget-tile {
   position: relative; display: grid; place-items: center; aspect-ratio: 1; text-align: center;
   border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;
@@ -454,7 +454,7 @@
 .collection-band h1 { font-size: var(--fs-h1); }
 .collection-band p { color: var(--text-secondary); margin-top: var(--space-3); max-width: 60ch; margin-inline: auto; }
 
-.plp { display: grid; grid-template-columns: 260px 1fr; gap: var(--space-8); align-items: start; }
+.plp { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--space-8); align-items: start; }
 .filters { position: sticky; top: 120px; }
 .filter-group { border-bottom: 1px solid var(--border); padding-block: var(--space-5); }
 .filter-group:first-child { padding-top: 0; }
@@ -641,9 +641,12 @@
   .hero--composed .hero__slides { height: auto; aspect-ratio: 1659 / 948; }
   .hero--composed .hero__banner img { height: 100%; object-fit: contain; }
 
-  .product-grid, .cat-grid, .tile-grid, .budget-grid { grid-template-columns: repeat(2, 1fr); }
+  /* .product-grid--3 (used on the collection/PLP grid) has the same
+     specificity as .product-grid, so it must be named here too or its
+     3-column rule keeps winning below 1024px and the grid overflows. */
+  .product-grid, .product-grid--3, .cat-grid, .tile-grid, .budget-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .review-grid, .store-grid { grid-template-columns: 1fr; }
-  .plp { grid-template-columns: 1fr; }
+  .plp { grid-template-columns: minmax(0, 1fr); }
   .filters { position: static; }
   .pdp { grid-template-columns: 1fr; gap: var(--space-7); }
   .pdp__info { position: static; }

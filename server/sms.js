@@ -1,37 +1,47 @@
 /**
- * Aurelle — SMS one-time passwords.
+ * Aurelle — SMS one-time passwords, delivered through Twilio.
  *
  * Configuration, all from the environment:
  *
- *   SMS_API_KEY      the gateway's apikey value
- *   SMS_SENDER       6-character DLT sender ID  (e.g. AURELE)
- *   SMS_ENTITY_ID    your DLT entity registration
- *   SMS_TEMPLATE_ID  the registered template for this message
- *   SMS_TEMPLATE     the message text, with {otp} and {mins} placeholders
- *   SMS_BASE_URL     gateway endpoint
- *   OTP_TTL_MINUTES  how long a code is valid (default 10)
+ *   TWILIO_ACCOUNT_SID   starts "AC…", from the Twilio console
+ *   TWILIO_AUTH_TOKEN    the account's auth token — used for basic auth
+ *                         unless an API key/secret pair is supplied instead
+ *   TWILIO_API_KEY       optional, starts "SK…" — a scoped, revocable
+ *                         credential; preferred over the auth token when set
+ *   TWILIO_API_SECRET    required alongside TWILIO_API_KEY
+ *   TWILIO_PHONE_NUMBER  the Twilio number messages are sent from, in
+ *                         E.164 form, e.g. +91xxxxxxxxxx
+ *   SMS_TEMPLATE         the message text, with {otp} and {mins} placeholders
+ *   OTP_TTL_MINUTES      how long a code is valid (default 10)
  *
- * On DLT: an Indian transactional SMS template is registered against one
- * entity and one sender ID, and the delivered text must match the registered
- * template exactly. Sending Aurelle's OTPs through a sender registered to a
- * different business means customers see that business's name, and the
- * traffic is attributed to them. Register your own sender and template, then
- * set the four variables above.
+ * Twilio accepts either an API key/secret (scoped, can be revoked without
+ * touching the main auth token) or the account SID/auth token pair. When
+ * an API key is present it is used; otherwise the request falls back to
+ * the account SID and auth token. Either way the account SID is required,
+ * since it identifies which account the number belongs to.
  *
- * Codes are never stored in readable form — only a salted hash — so a leaked
- * database cannot be used to log in as somebody.
+ * Codes are never stored in readable form — only a salted hash — so a
+ * leaked database cannot be used to log in as somebody.
  */
 import { createHash, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 
-const API_KEY = process.env.SMS_API_KEY || '';
-const SENDER = process.env.SMS_SENDER || '';
-const ENTITY_ID = process.env.SMS_ENTITY_ID || '';
-const TEMPLATE_ID = process.env.SMS_TEMPLATE_ID || '';
-const BASE_URL = process.env.SMS_BASE_URL ||
-  'https://vas.themultimedia.in/domestic/sendsms/bulksms_v2.php';
+const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const API_KEY = process.env.TWILIO_API_KEY || '';
+const API_SECRET = process.env.TWILIO_API_SECRET || '';
+const FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER || '';
 
-/* The delivered text must match the DLT-registered template exactly, so it
-   lives in configuration rather than in code. */
+const MESSAGES_URL = `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json`;
+
+/* API key + secret when both are set (scoped, revocable); otherwise the
+   account SID + auth token. Either pair is sent as HTTP basic auth. */
+const AUTH_USER = API_KEY && API_SECRET ? API_KEY : ACCOUNT_SID;
+const AUTH_PASS = API_KEY && API_SECRET ? API_SECRET : AUTH_TOKEN;
+
+/* Used to salt the OTP hash. Any of the account's secrets works — it only
+   needs to be stable and not guessable from outside. */
+const SALT = AUTH_TOKEN || API_SECRET || 'aurelle';
+
 const TEMPLATE = process.env.SMS_TEMPLATE ||
   'Dear User, Your Login OTP {otp} Valid for {mins} Please do not share this OTP.';
 
@@ -40,16 +50,22 @@ const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_S = 60;
 const MAX_PER_HOUR = 5;
 
-export const isConfigured = () => !!(API_KEY && SENDER);
+export const isConfigured = () =>
+  !!(ACCOUNT_SID && FROM_NUMBER && (AUTH_TOKEN || (API_KEY && API_SECRET)));
 
 export function configWarning() {
   if (!isConfigured()) return null;
-  if (!ENTITY_ID || !TEMPLATE_ID) {
-    return 'SMS_ENTITY_ID and SMS_TEMPLATE_ID are not set. Indian gateways ' +
-           'reject transactional SMS without a DLT entity and template.';
+  if (!/^AC[a-zA-Z0-9]+$/.test(ACCOUNT_SID)) {
+    return 'TWILIO_ACCOUNT_SID does not look right — it should start with "AC".';
   }
-  if (SENDER.length !== 6) {
-    return `SMS_SENDER is "${SENDER}". DLT sender IDs are exactly 6 characters.`;
+  if (API_KEY && !API_SECRET) {
+    return 'TWILIO_API_KEY is set but TWILIO_API_SECRET is not — Twilio will reject the request.';
+  }
+  if (API_KEY && !/^SK[a-zA-Z0-9]+$/.test(API_KEY)) {
+    return 'TWILIO_API_KEY does not look right — it should start with "SK".';
+  }
+  if (!/^\+[1-9]\d{6,14}$/.test(FROM_NUMBER)) {
+    return `TWILIO_PHONE_NUMBER is "${FROM_NUMBER}". It should be in E.164 form, e.g. +91xxxxxxxxxx.`;
   }
   return null;
 }
@@ -63,7 +79,7 @@ export function normalisePhone(input) {
 }
 
 const hashCode = (phone, code) =>
-  createHash('sha256').update(`${phone}:${code}:${API_KEY || 'aurelle'}`).digest('hex');
+  createHash('sha256').update(`${phone}:${code}:${SALT}`).digest('hex');
 
 function sameHash(a, b) {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
@@ -76,26 +92,39 @@ async function deliver(phone, code) {
     .replace('{otp}', code)
     .replace('{mins}', `${TTL_MINUTES} minutes`);
 
-  const url = `${BASE_URL}?apikey=${encodeURIComponent(API_KEY)}` +
-    `&type=TEXT&sender=${encodeURIComponent(SENDER)}` +
-    (ENTITY_ID ? `&entityId=${encodeURIComponent(ENTITY_ID)}` : '') +
-    (TEMPLATE_ID ? `&templateId=${encodeURIComponent(TEMPLATE_ID)}` : '') +
-    `&mobile=${encodeURIComponent(phone)}` +
-    `&message=${encodeURIComponent(message)}`;
+  const body = new URLSearchParams({
+    To: `+91${phone}`,
+    From: FROM_NUMBER,
+    Body: message,
+  });
+
+  const auth = Buffer.from(`${AUTH_USER}:${AUTH_PASS}`).toString('base64');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    const body = (await res.text()).trim();
-    if (!res.ok) throw new Error(`SMS gateway ${res.status}`);
-    // Gateways vary; treat an explicit failure word as a failure.
-    if (/error|invalid|fail/i.test(body) && !/success/i.test(body)) {
-      throw new Error(`SMS gateway refused: ${body.slice(0, 120)}`);
+    const res = await fetch(MESSAGES_URL, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const detail = data?.message ? `${data.message} (${data.code})` : `Twilio ${res.status}`;
+      throw new Error(detail);
     }
-    return { delivered: true, response: body.slice(0, 200) };
+    // queued / sending / sent are all acceptable at this point — final
+    // delivery is confirmed asynchronously by Twilio, not in this response.
+    if (data?.status === 'failed' || data?.status === 'undelivered') {
+      throw new Error(data?.error_message || `Twilio reported "${data.status}"`);
+    }
+    return { delivered: true, sid: data?.sid };
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('SMS gateway timed out');
+    if (e.name === 'AbortError') throw new Error('Twilio request timed out');
     throw e;
   } finally {
     clearTimeout(timer);
@@ -136,7 +165,7 @@ export async function requestOtp(db, rawPhone, { ip } = {}) {
   });
 
   if (!isConfigured()) {
-    // Without a gateway the flow still works end to end for development.
+    // Without Twilio configured the flow still works end to end for development.
     console.log(`[sms] not configured — OTP for ${phone} is ${code}`);
     return { ok: true, id, devCode: code, delivered: false };
   }
@@ -189,9 +218,9 @@ export function verifyOtp(db, rawPhone, code) {
 
 export function publicConfig() {
   return {
-    enabled: true,                 // the flow works with or without a gateway
+    enabled: true,                 // the flow works with or without Twilio configured
     delivers: isConfigured(),      // false means codes are logged, not texted
     ttlMinutes: TTL_MINUTES,
-    sender: SENDER || null,
+    sender: FROM_NUMBER || null,
   };
 }
