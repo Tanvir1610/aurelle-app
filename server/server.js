@@ -193,6 +193,7 @@ route('POST', /^\/api\/orders$/, async (req, res) => {
   if (!isPin(b.pincode)) return bad(res, 'Invalid pincode');
   try {
     const order = await DB.createOrder(b);
+    sendOrderEmail('placed', order).catch(e => console.error('[mail]', e.message));
     json(res, 201, { ref: order.ref, total: order.total, status: order.status });
   } catch (e) { bad(res, e.message); }
 });
