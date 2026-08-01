@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="assets/css/tokens.css">
 <link rel="stylesheet" href="assets/css/site.css">
 </head>
-<body data-page="collection" data-nav="Shop">
+<body data-page="collection" data-nav="Category">
 <main id="main">
   <div class="container">
     <nav class="crumbs" aria-label="Breadcrumb">
@@ -28,7 +28,14 @@
   <section class="section section--tight" id="plpTop">
     <div class="container">
       <div class="plp">
-        <aside>
+        <aside id="filterSheet">
+          <div class="filter-sheet-head">
+            <h3>Filter</h3>
+            <button class="icon-btn" type="button" id="closeFilters" aria-label="Close">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
           <div class="filters">
             <div class="field search-wrap" style="margin-bottom:var(--space-5)">
               <label for="plpSearch">Search</label>
@@ -37,10 +44,36 @@
               <div class="suggest" id="searchSuggest" hidden></div>
             </div>
             <div id="filters"></div>
+            <div class="filter-sheet-foot">
+              <button class="btn btn--primary btn--block" type="button" id="applyFilters">
+                Show results</button>
+            </div>
           </div>
         </aside>
 
         <div>
+          <!-- Phone-width controls: filter sheet, sort, and category chips. -->
+          <div class="plp-mobile-bar">
+            <button type="button" id="openFilters">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.6" stroke-linecap="round"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+              Filter <span id="filterCount"></span>
+            </button>
+            <span class="divider"></span>
+            <label style="display:flex;align-items:center;gap:6px">
+              Sort
+              <select id="plpSortMobile" style="border:0;background:none;font-family:var(--font-sans)">
+                <option value="featured">Featured</option>
+                <option value="new">Newest</option>
+                <option value="popular">Most reviewed</option>
+                <option value="rating">Highest rated</option>
+                <option value="low">Price: low to high</option>
+                <option value="high">Price: high to low</option>
+              </select>
+            </label>
+          </div>
+          <div class="cat-chips" id="catChips"></div>
+
           <div class="plp__bar">
             <span class="plp__count" id="plpCount">—</span>
             <label style="display:flex;align-items:center;gap:var(--space-3);font-size:var(--fs-xs);letter-spacing:var(--ls-wide);text-transform:uppercase;color:var(--text-secondary)">

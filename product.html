@@ -26,6 +26,17 @@
 
   <section class="usp"><div class="container"><div class="usp__grid" id="uspStrip"></div></div></section>
 
+  <!-- Sticky buy bar for phones; the in-page buttons hide at that width. -->
+  <div class="pdp-sticky" id="pdpSticky">
+    <div class="stepper">
+      <button type="button" id="sQtyDown" aria-label="Decrease quantity">−</button>
+      <span id="sQtyVal">1</span>
+      <button type="button" id="sQtyUp" aria-label="Increase quantity">+</button>
+    </div>
+    <span class="pdp-sticky__price" id="sPrice"></span>
+    <button class="btn btn--gold pdp-sticky__buy" type="button" id="sAdd">Add to bag</button>
+  </div>
+
   <section class="section">
     <div class="container">
       <div class="section-head"><p class="eyebrow">Complete the look</p><h2>Wears well with</h2></div>
