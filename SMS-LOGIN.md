@@ -14,43 +14,41 @@ enter mobile number
 A new customer gives a name; email is optional but recommended, since order
 confirmations and invoices are sent by email.
 
-## Configure the gateway
+## Configure Twilio
 
 ```
-SMS_API_KEY=...
-SMS_SENDER=AURELE            # your 6-character DLT sender ID
-SMS_ENTITY_ID=...            # your DLT entity registration
-SMS_TEMPLATE_ID=...          # the registered template for this message
+TWILIO_ACCOUNT_SID=...          # starts "AC…", from the Twilio console
+TWILIO_AUTH_TOKEN=...           # used for basic auth, unless an API key is set below
+TWILIO_API_KEY=...              # optional, starts "SK…" — a scoped, revocable credential
+TWILIO_API_SECRET=...           # required alongside TWILIO_API_KEY
+TWILIO_PHONE_NUMBER=+91xxxxxxxxxx   # the Twilio number messages are sent from, E.164 form
 SMS_TEMPLATE=Dear User, Your Login OTP {otp} Valid for {mins} Please do not share this OTP.
 OTP_TTL_MINUTES=10
 ```
 
-`{otp}` and `{mins}` are substituted at send time. The rest of the text must
-match your registered DLT template exactly, or the gateway rejects it.
+`{otp}` and `{mins}` are substituted at send time.
 
-**Without `SMS_API_KEY` the flow still works end to end** — codes are written
-to the server log instead of being texted, and returned to the browser so you
-can develop and test without spending messages. The moment a key is present,
-real SMS is sent and the code stops being exposed.
+Twilio accepts either credential pair for authenticating the request:
 
-## About the credentials you supplied
+- **Account SID + auth token** — the pair shown on the console's main
+  dashboard. Simplest to set up.
+- **API key + secret** (recommended) — a separate, scoped credential
+  created under Account → API keys & tokens. It can be revoked on its own
+  without touching the main auth token, so it's the safer choice for a
+  server that's deployed somewhere other than your own machine.
 
-The key you shared decodes to a username and password for a **ZappDeal**
-account, with sender ID `ZPDEAL` and that company's DLT entity and template
-registrations.
+If `TWILIO_API_KEY` and `TWILIO_API_SECRET` are both set, they're used. Either
+way, `TWILIO_ACCOUNT_SID` is always required — it identifies which account
+the sending number belongs to.
 
-Two consequences, both practical:
+**Without `TWILIO_ACCOUNT_SID` the flow still works end to end** — codes are
+written to the server log instead of being texted, and returned to the
+browser so you can develop and test without spending messages. The moment
+Twilio is configured, real SMS is sent and the code stops being exposed.
 
-- Customers signing into Aurelle would receive a message signed
-  *"Regards, ZappDeal"*.
-- Under TRAI's DLT rules the template is bound to that entity and sender. The
-  traffic is billed and attributed to them, and a mismatched template is
-  rejected outright by most gateways.
-
-Register Aurelle's own sender ID and template with your SMS provider, then set
-the four variables above. Nothing in the code needs to change.
-
-Also worth doing: that credential has been posted in a chat thread. Rotate it.
+Keep these values out of source control — set them in your host's
+environment variables (Render, Fly, Railway, etc.), never commit a filled-in
+`.env`.
 
 ## What stops abuse
 
