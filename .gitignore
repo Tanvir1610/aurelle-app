@@ -1,9 +1,7 @@
 node_modules/
-data/*.db
-data/*.db-wal
-data/*.db-shm
-assets/img/stock/
-assets/video/*.mp4
-
 .env
-.env.local
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.log
+.DS_Store

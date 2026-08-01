@@ -14,37 +14,43 @@ enter mobile number
 A new customer gives a name; email is optional but recommended, since order
 confirmations and invoices are sent by email.
 
-## Configure Twilio
+## Configure the SMS gateway
+
+Aurelle sends OTPs through the vas.themultimedia.in bulk SMS gateway, a
+DLT-registered Indian SMS provider.
 
 ```
-TWILIO_ACCOUNT_SID=...          # starts "AC…", from the Twilio console
-TWILIO_AUTH_TOKEN=...           # used for basic auth, unless an API key is set below
-TWILIO_API_KEY=...              # optional, starts "SK…" — a scoped, revocable credential
-TWILIO_API_SECRET=...           # required alongside TWILIO_API_KEY
-TWILIO_PHONE_NUMBER=+91xxxxxxxxxx   # the Twilio number messages are sent from, E.164 form
-SMS_TEMPLATE=Dear User, Your Login OTP {otp} Valid for {mins} Please do not share this OTP.
+SMS_API_KEY=...                 # from the gateway dashboard
+SMS_SENDER=ZPDEAL               # approved 6-character DLT sender ID
+SMS_ENTITY_ID=...               # DLT entity ID
+SMS_TEMPLATE_ID=...             # DLT template ID for this exact message
+SMS_TEMPLATE=Dear User, Your Login OTP {#var#} Valid for {#var#} Please do not share this OTP.
+SMS_GATEWAY_URL=https://vas.themultimedia.in/domestic/sendsms/bulksms_v2.php
 OTP_TTL_MINUTES=10
 ```
 
-`{otp}` and `{mins}` are substituted at send time.
+The two `{#var#}` placeholders are filled in order at send time: the code,
+then the validity window (e.g. "10 minutes").
 
-Twilio accepts either credential pair for authenticating the request:
+DLT rules mean the message text has to match what's registered
+byte-for-byte outside those two placeholders — carriers silently drop
+anything that doesn't. That includes any brand or company name written into
+the template itself, which does not need to match `SMS_SENDER` or the
+storefront's own name.
 
-- **Account SID + auth token** — the pair shown on the console's main
-  dashboard. Simplest to set up.
-- **API key + secret** (recommended) — a separate, scoped credential
-  created under Account → API keys & tokens. It can be revoked on its own
-  without touching the main auth token, so it's the safer choice for a
-  server that's deployed somewhere other than your own machine.
+`SMS_API_KEY`, `SMS_SENDER`, `SMS_ENTITY_ID` and `SMS_TEMPLATE_ID` are all
+required together. If the gateway returns an authorization error (Twilio's
+old error 70051 and similar codes from other gateways both mean the same
+thing), it's almost always one of these four not being linked to the others
+on the gateway's own dashboard — double-check the sender ID, entity ID and
+template ID are all associated with the API key there before assuming the
+code is wrong.
 
-If `TWILIO_API_KEY` and `TWILIO_API_SECRET` are both set, they're used. Either
-way, `TWILIO_ACCOUNT_SID` is always required — it identifies which account
-the sending number belongs to.
-
-**Without `TWILIO_ACCOUNT_SID` the flow still works end to end** — codes are
+**Without `SMS_API_KEY` the flow still works end to end** — codes are
 written to the server log instead of being texted, and returned to the
 browser so you can develop and test without spending messages. The moment
-Twilio is configured, real SMS is sent and the code stops being exposed.
+the gateway is configured, real SMS is sent and the code stops being
+exposed.
 
 Keep these values out of source control — set them in your host's
 environment variables (Render, Fly, Railway, etc.), never commit a filled-in
