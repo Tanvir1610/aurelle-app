@@ -14,47 +14,43 @@ enter mobile number
 A new customer gives a name; email is optional but recommended, since order
 confirmations and invoices are sent by email.
 
-## Configure the SMS gateway
-
-Aurelle sends OTPs through the vas.themultimedia.in bulk SMS gateway, a
-DLT-registered Indian SMS provider.
+## Configure the gateway
 
 ```
-SMS_API_KEY=...                 # from the gateway dashboard
-SMS_SENDER=ZPDEAL               # approved 6-character DLT sender ID
-SMS_ENTITY_ID=...               # DLT entity ID
-SMS_TEMPLATE_ID=...             # DLT template ID for this exact message
-SMS_TEMPLATE=Dear User, Your Login OTP {#var#} Valid for {#var#} Please do not share this OTP.
-SMS_GATEWAY_URL=https://vas.themultimedia.in/domestic/sendsms/bulksms_v2.php
+SMS_API_KEY=...
+SMS_SENDER=AURELE            # your 6-character DLT sender ID
+SMS_ENTITY_ID=...            # your DLT entity registration
+SMS_TEMPLATE_ID=...          # the registered template for this message
+SMS_TEMPLATE=Dear User, Your Login OTP {otp} Valid for {mins} Please do not share this OTP.
 OTP_TTL_MINUTES=10
 ```
 
-The two `{#var#}` placeholders are filled in order at send time: the code,
-then the validity window (e.g. "10 minutes").
+`{otp}` and `{mins}` are substituted at send time. The rest of the text must
+match your registered DLT template exactly, or the gateway rejects it.
 
-DLT rules mean the message text has to match what's registered
-byte-for-byte outside those two placeholders — carriers silently drop
-anything that doesn't. That includes any brand or company name written into
-the template itself, which does not need to match `SMS_SENDER` or the
-storefront's own name.
+**Without `SMS_API_KEY` the flow still works end to end** — codes are written
+to the server log instead of being texted, and returned to the browser so you
+can develop and test without spending messages. The moment a key is present,
+real SMS is sent and the code stops being exposed.
 
-`SMS_API_KEY`, `SMS_SENDER`, `SMS_ENTITY_ID` and `SMS_TEMPLATE_ID` are all
-required together. If the gateway returns an authorization error (Twilio's
-old error 70051 and similar codes from other gateways both mean the same
-thing), it's almost always one of these four not being linked to the others
-on the gateway's own dashboard — double-check the sender ID, entity ID and
-template ID are all associated with the API key there before assuming the
-code is wrong.
+## About the credentials you supplied
 
-**Without `SMS_API_KEY` the flow still works end to end** — codes are
-written to the server log instead of being texted, and returned to the
-browser so you can develop and test without spending messages. The moment
-the gateway is configured, real SMS is sent and the code stops being
-exposed.
+The key you shared decodes to a username and password for a **ZappDeal**
+account, with sender ID `ZPDEAL` and that company's DLT entity and template
+registrations.
 
-Keep these values out of source control — set them in your host's
-environment variables (Render, Fly, Railway, etc.), never commit a filled-in
-`.env`.
+Two consequences, both practical:
+
+- Customers signing into Aurelle would receive a message signed
+  *"Regards, ZappDeal"*.
+- Under TRAI's DLT rules the template is bound to that entity and sender. The
+  traffic is billed and attributed to them, and a mismatched template is
+  rejected outright by most gateways.
+
+Register Aurelle's own sender ID and template with your SMS provider, then set
+the four variables above. Nothing in the code needs to change.
+
+Also worth doing: that credential has been posted in a chat thread. Rotate it.
 
 ## What stops abuse
 

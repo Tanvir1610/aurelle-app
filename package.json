@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node --watch server/server.js",
-    "test": "node tools/account-test.mjs && node tools/api-test.mjs && node tools/auth-test.mjs && node tools/catalogue-test.mjs && node tools/dual-auth-test.mjs && node tools/email-test.mjs && node tools/hero-test.mjs && node tools/integration-test.mjs && node tools/interaction-test.mjs && node tools/loop-test.mjs && node tools/migration-test.mjs && node tools/mobile-test.mjs && node tools/otp-test.mjs && node tools/pages-test.mjs && node tools/payment-test.mjs && node tools/signin-test.mjs && node tools/smoke-test.mjs && node tools/uifeat-test.mjs && node tools/ux-test.mjs",
+    "test": "node tools/account-test.mjs && node tools/api-test.mjs && node tools/auth-test.mjs && node tools/catalogue-test.mjs && node tools/dual-auth-test.mjs && node tools/email-test.mjs && node tools/hero-test.mjs && node tools/integration-test.mjs && node tools/interaction-test.mjs && node tools/loading-test.mjs && node tools/loop-test.mjs && node tools/migration-test.mjs && node tools/mobile-test.mjs && node tools/otp-test.mjs && node tools/pages-test.mjs && node tools/payment-test.mjs && node tools/signin-test.mjs && node tools/smoke-test.mjs && node tools/uifeat-test.mjs && node tools/ux-test.mjs",
     "test:api": "node tools/api-test.mjs",
     "seed:demo": "node tools/seed-demo.mjs",
     "art": "python3 tools/generate_art.py",
