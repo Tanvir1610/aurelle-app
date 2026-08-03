@@ -20,7 +20,7 @@ const CASES = [
                   '#pdpInfo .accordion__item', '#pdpAlso .card', '#pdpReviews .review']],
   ['cart.html', ['#cartWrap']],
   ['checkout.html', ['#coForm', '#coSummary']],
-  ['confirmation.html?ref=AUR123456', ['#confPicks .card']],
+  ['confirmation.html?ref=AUR123456', ['#confBox']],
   ['wishlist.html', ['#wishGrid']],
   ['about.html', ['.story', '.site-footer']],
   ['contact.html', ['#contactForm']],
@@ -77,11 +77,14 @@ for (const [target, selectors] of CASES) {
   if (file === 'index.html') {
     const btn = doc.querySelector('[data-add]');
     btn?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 320));
     const count = doc.querySelector('#cartCount')?.textContent;
     checks++;
     if (count !== '1') { failures++; console.log(`FAIL  add-to-bag did not update badge (got "${count}")`); }
     else console.log('ok    add-to-bag updates the cart badge');
 
+    // The button shows a busy state briefly before the drawer opens.
+    await new Promise(r => setTimeout(r, 320));
     const drawerOpen = doc.querySelector('#cartDrawer')?.classList.contains('is-open');
     checks++;
     if (!drawerOpen) { failures++; console.log('FAIL  cart drawer did not open'); }

@@ -391,8 +391,14 @@ window.AU = (function () {
     document.addEventListener('click', (e) => {
       const add = e.target.closest('[data-add]');
       if (add) {
+        // Acknowledge the tap even though the work is instant — a button
+        // that never visibly reacts gets pressed twice.
+        const restore = window.AU_LOADING ? window.AU_LOADING.busy(add) : () => {};
         const p = C().add(add.dataset.add, 1, add.dataset.finish);
-        if (p) { toast(`${p.name} added to your bag`); openCart(); }
+        setTimeout(() => {
+          restore();
+          if (p) { toast(`${p.name} added to your bag`); openCart(); }
+        }, 220);
         return;
       }
       const wish = e.target.closest('[data-wish]');

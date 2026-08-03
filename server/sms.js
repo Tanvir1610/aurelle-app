@@ -1,25 +1,25 @@
 /**
- * Aurelle — SMS one-time passwords, delivered through the vas.themultimedia.in
- * bulk SMS gateway (DLT-registered, India).
+ * Aurelle — SMS one-time passwords.
  *
  * Configuration, all from the environment:
  *
- *   SMS_API_KEY      the account's API key, from the gateway dashboard
- *   SMS_SENDER       the approved 6-character sender ID, e.g. ZPDEAL
- *   SMS_ENTITY_ID    DLT entity ID registered with the telecom operators
- *   SMS_TEMPLATE_ID  DLT template ID for this exact message
- *   SMS_TEMPLATE     the message text, with two {#var#} placeholders —
- *                    filled in order with the OTP, then the validity window
- *   SMS_GATEWAY_URL  the gateway endpoint (has a default, rarely changed)
+ *   SMS_API_KEY      the gateway's apikey value
+ *   SMS_SENDER       6-character DLT sender ID  (e.g. AURELE)
+ *   SMS_ENTITY_ID    your DLT entity registration
+ *   SMS_TEMPLATE_ID  the registered template for this message
+ *   SMS_TEMPLATE     the message text, with {otp} and {mins} placeholders
+ *   SMS_BASE_URL     gateway endpoint
  *   OTP_TTL_MINUTES  how long a code is valid (default 10)
  *
- * DLT rules are strict: carriers reject anything that doesn't match a
- * template byte-for-byte outside of its {#var#} slots, so SMS_TEMPLATE must
- * stay exactly as registered — including the sender name inside the text,
- * which does not have to match SMS_SENDER or the storefront's brand name.
+ * On DLT: an Indian transactional SMS template is registered against one
+ * entity and one sender ID, and the delivered text must match the registered
+ * template exactly. Sending Aurelle's OTPs through a sender registered to a
+ * different business means customers see that business's name, and the
+ * traffic is attributed to them. Register your own sender and template, then
+ * set the four variables above.
  *
- * Codes are never stored in readable form — only a salted hash — so a
- * leaked database cannot be used to log in as somebody.
+ * Codes are never stored in readable form — only a salted hash — so a leaked
+ * database cannot be used to log in as somebody.
  */
 import { createHash, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 
@@ -27,37 +27,29 @@ const API_KEY = process.env.SMS_API_KEY || '';
 const SENDER = process.env.SMS_SENDER || '';
 const ENTITY_ID = process.env.SMS_ENTITY_ID || '';
 const TEMPLATE_ID = process.env.SMS_TEMPLATE_ID || '';
-const GATEWAY_URL = process.env.SMS_GATEWAY_URL ||
+const BASE_URL = process.env.SMS_BASE_URL ||
   'https://vas.themultimedia.in/domestic/sendsms/bulksms_v2.php';
 
-/* Used to salt the OTP hash. Any of the account's secrets works — it only
-   needs to be stable and not guessable from outside. */
-const SALT = API_KEY || 'aurelle';
-
+/* The delivered text must match the DLT-registered template exactly, so it
+   lives in configuration rather than in code. */
 const TEMPLATE = process.env.SMS_TEMPLATE ||
-  'Dear User, Your Login OTP {#var#} Valid for {#var#} Please do not share this OTP.';
+  'Dear User, Your Login OTP {otp} Valid for {mins} Please do not share this OTP.';
 
 export const TTL_MINUTES = Number(process.env.OTP_TTL_MINUTES || 10);
 const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_S = 60;
 const MAX_PER_HOUR = 5;
 
-export const isConfigured = () =>
-  !!(API_KEY && SENDER && ENTITY_ID && TEMPLATE_ID);
+export const isConfigured = () => !!(API_KEY && SENDER);
 
 export function configWarning() {
   if (!isConfigured()) return null;
-  if (!/^[A-Za-z0-9]{6}$/.test(SENDER)) {
-    return `SMS_SENDER is "${SENDER}". DLT sender IDs are normally exactly 6 alphanumeric characters.`;
+  if (!ENTITY_ID || !TEMPLATE_ID) {
+    return 'SMS_ENTITY_ID and SMS_TEMPLATE_ID are not set. Indian gateways ' +
+           'reject transactional SMS without a DLT entity and template.';
   }
-  if (!/^\d+$/.test(ENTITY_ID)) {
-    return 'SMS_ENTITY_ID does not look right — it should be the numeric DLT entity ID.';
-  }
-  if (!/^\d+$/.test(TEMPLATE_ID)) {
-    return 'SMS_TEMPLATE_ID does not look right — it should be the numeric DLT template ID.';
-  }
-  if ((TEMPLATE.match(/\{#var#\}/g) || []).length !== 2) {
-    return 'SMS_TEMPLATE should contain exactly two {#var#} placeholders (OTP, then validity).';
+  if (SENDER.length !== 6) {
+    return `SMS_SENDER is "${SENDER}". DLT sender IDs are exactly 6 characters.`;
   }
   return null;
 }
@@ -71,7 +63,7 @@ export function normalisePhone(input) {
 }
 
 const hashCode = (phone, code) =>
-  createHash('sha256').update(`${phone}:${code}:${SALT}`).digest('hex');
+  createHash('sha256').update(`${phone}:${code}:${API_KEY || 'aurelle'}`).digest('hex');
 
 function sameHash(a, b) {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
@@ -79,51 +71,31 @@ function sameHash(a, b) {
 }
 
 /* ------------------------------------------------------------- send -- */
-/** Fill the two {#var#} slots in order: the code, then the validity window. */
-function renderMessage(code) {
-  let filled = 0;
-  return TEMPLATE.replace(/\{#var#\}/g, () => {
-    filled += 1;
-    return filled === 1 ? code : `${TTL_MINUTES} minutes`;
-  });
-}
-
 async function deliver(phone, code) {
-  const message = renderMessage(code);
+  const message = TEMPLATE
+    .replace('{otp}', code)
+    .replace('{mins}', `${TTL_MINUTES} minutes`);
 
-  const params = new URLSearchParams({
-    apikey: API_KEY,
-    type: 'TEXT',
-    sender: SENDER,
-    entityId: ENTITY_ID,
-    templateId: TEMPLATE_ID,
-    mobile: phone,
-    message,
-  });
+  const url = `${BASE_URL}?apikey=${encodeURIComponent(API_KEY)}` +
+    `&type=TEXT&sender=${encodeURIComponent(SENDER)}` +
+    (ENTITY_ID ? `&entityId=${encodeURIComponent(ENTITY_ID)}` : '') +
+    (TEMPLATE_ID ? `&templateId=${encodeURIComponent(TEMPLATE_ID)}` : '') +
+    `&mobile=${encodeURIComponent(phone)}` +
+    `&message=${encodeURIComponent(message)}`;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const res = await fetch(`${GATEWAY_URL}?${params.toString()}`, {
-      method: 'GET',
-      signal: ctrl.signal,
-    });
-    const text = (await res.text()).trim();
-
-    if (!res.ok) {
-      throw new Error(`Gateway ${res.status}: ${text.slice(0, 200)}`);
+    const res = await fetch(url, { signal: ctrl.signal });
+    const body = (await res.text()).trim();
+    if (!res.ok) throw new Error(`SMS gateway ${res.status}`);
+    // Gateways vary; treat an explicit failure word as a failure.
+    if (/error|invalid|fail/i.test(body) && !/success/i.test(body)) {
+      throw new Error(`SMS gateway refused: ${body.slice(0, 120)}`);
     }
-    // The gateway replies with plain text, not JSON — a status word or an
-    // ID on success, or a message containing "error"/"fail" on rejection.
-    // "Authorization Error" (code 70051 among others) means the API key,
-    // sender ID, entity ID or template ID is wrong, or not linked together
-    // on the gateway's dashboard.
-    if (/error|fail|invalid|reject/i.test(text)) {
-      throw new Error(text || 'Gateway rejected the message');
-    }
-    return { delivered: true, response: text };
+    return { delivered: true, response: body.slice(0, 200) };
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('SMS gateway request timed out');
+    if (e.name === 'AbortError') throw new Error('SMS gateway timed out');
     throw e;
   } finally {
     clearTimeout(timer);
@@ -164,7 +136,7 @@ export async function requestOtp(db, rawPhone, { ip } = {}) {
   });
 
   if (!isConfigured()) {
-    // Without the gateway configured the flow still works end to end for development.
+    // Without a gateway the flow still works end to end for development.
     console.log(`[sms] not configured — OTP for ${phone} is ${code}`);
     return { ok: true, id, devCode: code, delivered: false };
   }
@@ -217,7 +189,7 @@ export function verifyOtp(db, rawPhone, code) {
 
 export function publicConfig() {
   return {
-    enabled: true,                 // the flow works with or without the gateway configured
+    enabled: true,                 // the flow works with or without a gateway
     delivers: isConfigured(),      // false means codes are logged, not texted
     ttlMinutes: TTL_MINUTES,
     sender: SENDER || null,

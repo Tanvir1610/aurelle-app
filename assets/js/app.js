@@ -278,6 +278,10 @@
       $('#plpCount').textContent = filtered.length === 1 ? '1 piece' : `${filtered.length} pieces`;
       renderChips();
 
+      // Show placeholders rather than an empty area while the grid builds.
+      if (!$('#plpGrid').innerHTML) {
+        $('#plpGrid').innerHTML = window.AU_LOADING.skeletonGrid(6);
+      }
       $('#plpGrid').innerHTML = slice.length
         ? `<div class="product-grid product-grid--3">${slice.map(productCard).join('')}</div>`
         : `<div class="empty"><h3>Nothing matches those filters</h3>
@@ -848,34 +852,94 @@
 
   /* ============================================== CONFIRMATION === */
   function confirmation() {
-    const ref = param('ref') || 'AUR000000';
-    $('#confRef').textContent = ref;
-    $('#confPicks').innerHTML = D.products
-      .filter(p => p.badge === 'Bestseller').slice(0, 4).map(productCard).join('');
+    const ref = param('ref') || '';
+    const box = $('#confBox') || document.querySelector('#main .narrow');
 
-    /* Never take the redirect's word for it — ask our server, which asks
-       the gateway. Until that answers, say nothing about payment. */
-    const note = document.createElement('p');
-    note.className = 'muted';
-    note.style.cssText = 'margin-top:var(--space-4);font-size:var(--fs-sm)';
-    $('#confRef').closest('p')?.after(note);
+    /* Never congratulate anyone on a payment we have not confirmed.
+       The page starts in a neutral "checking" state and only becomes a
+       thank-you once the gateway says the money arrived. */
+    function paintChecking() {
+      box.innerHTML = `<div class="center">
+        <p class="eyebrow">One moment</p>
+        <h1 style="font-size:var(--fs-h2)">Confirming your payment…</h1>
+        <p class="muted" style="margin-top:var(--space-4)">
+          We are checking with our payment partner. This takes a few seconds.</p>
+        <div class="au-spinner" style="margin:var(--space-7) auto"></div>
+      </div>`;
+    }
 
+    function paintPaid(order) {
+      box.innerHTML = `<div class="center">
+        <p class="eyebrow">Order confirmed</p>
+        <h1 style="font-size:var(--fs-h1)">Thank you. It is on its way.</h1>
+        <p class="muted" style="margin-top:var(--space-4)">
+          Your order reference is <strong>${esc(ref)}</strong>. A confirmation and
+          your invoice are on the way to your inbox, and you will get a tracking
+          link by SMS when the parcel leaves our warehouse.</p>
+        <div style="display:flex;gap:var(--space-3);justify-content:center;
+                    margin-top:var(--space-7);flex-wrap:wrap">
+          <a class="btn btn--primary" href="track-order.html">Track this order</a>
+          <a class="btn btn--ghost" href="collection.html">Keep shopping</a>
+        </div></div>`;
+      C.clear();
+    }
+
+    /* Cancelled, failed, or simply never completed. */
+    function paintUnpaid(reason) {
+      box.innerHTML = `<div class="center">
+        <p class="eyebrow" style="color:var(--red-500)">Payment not completed</p>
+        <h1 style="font-size:var(--fs-h2)">Your order is not confirmed yet</h1>
+        <p class="muted" style="margin-top:var(--space-4);max-width:46ch;margin-inline:auto">
+          ${esc(reason || 'We have not received a payment for this order.')}
+          Nothing has been charged.</p>
+        <p class="muted" style="margin-top:var(--space-3)">
+          Your order <strong>${esc(ref)}</strong> is saved, and your bag is untouched.</p>
+        <div style="display:flex;gap:var(--space-3);justify-content:center;
+                    margin-top:var(--space-7);flex-wrap:wrap">
+          <button class="btn btn--gold" type="button" id="retryPay">Try payment again</button>
+          <a class="btn btn--ghost" href="cart.html">Back to my bag</a>
+        </div>
+        <p class="muted" style="font-size:var(--fs-xs);margin-top:var(--space-6)">
+          If you were charged, it can take a minute to reach us —
+          <a href="track-order.html">check the status</a> before paying again.</p>
+      </div>`;
+
+      $('#retryPay')?.addEventListener('click', async () => {
+        const btn = $('#retryPay');
+        btn.disabled = true; btn.textContent = 'Opening payment…';
+        const r = await window.AU_API.startPayment(ref);
+        if (!r.ok) {
+          btn.disabled = false; btn.textContent = 'Try payment again';
+          toast(r.reason || 'Could not open the payment page');
+        }
+      });
+    }
+
+    if (!/^AUR\d{6}$/.test(ref)) { paintUnpaid('We could not find that order reference.'); return; }
+
+    paintChecking();
     (async () => {
-      if (!window.AU_API.paymentsEnabled()) return;
-      note.textContent = 'Confirming your payment…';
+      // Cash on delivery has no gateway to ask, so it is confirmed on placement.
+      if (!window.AU_API.paymentsEnabled || !window.AU_API.paymentsEnabled()) {
+        paintPaid(); return;
+      }
       try {
         const r = await window.AU_API.verifyPayment(ref);
-        if (r.paid) {
-          note.textContent = 'Payment received. We are packing your order now.';
-          note.style.color = 'var(--success)';
-          C.clear();
-        } else {
-          note.innerHTML = 'We have not seen a payment for this order yet. ' +
-            'If you were charged it can take a minute to reach us — ' +
-            '<a href="track-order.html">check the status</a>.';
-        }
+        if (r.paid) paintPaid();
+        else if (r.status === 'ACTIVE') paintUnpaid('The payment was not completed.');
+        else if (r.status === 'EXPIRED') paintUnpaid('That payment session expired.');
+        else paintUnpaid('The payment did not go through.');
       } catch (e) {
-        note.textContent = '';
+        // Unreachable gateway is not the same as an unpaid order — say so
+        // rather than claiming either outcome.
+        box.innerHTML = `<div class="center">
+          <p class="eyebrow">Order received</p>
+          <h1 style="font-size:var(--fs-h2)">We are still confirming your payment</h1>
+          <p class="muted" style="margin-top:var(--space-4)">
+            Your order <strong>${esc(ref)}</strong> is saved. We could not reach our
+            payment partner just now, so we will confirm by email shortly.</p>
+          <a class="btn btn--primary" style="margin-top:var(--space-6)"
+             href="track-order.html">Track this order</a></div>`;
       }
     })();
   }
